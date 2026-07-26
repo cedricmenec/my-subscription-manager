@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SubscriptionDatabase } from './db'
-import { saveLocalDraft } from './localDrafts'
+import {
+  createSubscription,
+  listSubscriptions,
+  updateSubscription,
+} from '../services/subscriptions'
 
 const createdDbNames: string[] = []
 
@@ -16,8 +20,8 @@ afterEach(async () => {
 })
 
 describe('IndexedDB integration', () => {
-  it('ouvre la base, écrit localement et conserve les données après réouverture', async () => {
-    const dbName = `integration-db-${crypto.randomUUID()}`
+  it('écrit localement un abonnement et conserve les données après réouverture', async () => {
+    const dbName = `integration-crud-db-${crypto.randomUUID()}`
     createdDbNames.push(dbName)
 
     const db1 = new SubscriptionDatabase({
@@ -26,7 +30,28 @@ describe('IndexedDB integration', () => {
     })
 
     await db1.open()
-    await saveLocalDraft({ key: 'draft-a', value: 'contenu local' }, db1)
+    const created = await createSubscription(
+      {
+        name: 'Youtube Premium',
+        status: 'ACTIVE',
+        renewalMode: 'AUTOMATIC',
+        currentPriceMinor: 1299,
+        currency: 'EUR',
+        billingInterval: 'MONTHLY',
+        nextChargeDate: '2026-08-02',
+      },
+      db1,
+    )
+    await updateSubscription(
+      created.id,
+      {
+        name: 'YouTube Premium Famille',
+        status: 'PAUSED',
+        renewalMode: 'MANUAL',
+        pauseUntil: '2026-09-01',
+      },
+      db1,
+    )
     db1.close()
 
     const db2 = new SubscriptionDatabase({
@@ -35,9 +60,9 @@ describe('IndexedDB integration', () => {
     })
 
     await db2.open()
-    const draft = await db2.localSettings.get('draft-a')
-
-    expect(draft?.value).toBe('contenu local')
+    const subscriptions = await listSubscriptions({}, db2)
+    expect(subscriptions).toHaveLength(1)
+    expect(subscriptions[0].name).toBe('YouTube Premium Famille')
     db2.close()
   })
 
@@ -53,10 +78,49 @@ describe('IndexedDB integration', () => {
     })
 
     await db.open()
-    await saveLocalDraft({ key: 'offline-draft', value: 'ok-hors-ligne' }, db)
+    await createSubscription(
+      {
+        name: 'Canal Plus',
+        status: 'ACTIVE',
+        renewalMode: 'AUTOMATIC',
+      },
+      db,
+    )
 
-    const draft = await db.localSettings.get('offline-draft')
-    expect(draft?.value).toBe('ok-hors-ligne')
+    const subscriptions = await listSubscriptions({}, db)
+    expect(subscriptions).toHaveLength(1)
+    expect(subscriptions[0].name).toBe('Canal Plus')
+
+    db.close()
+  })
+
+  it('conserve la donnée locale quand une sync échoue après enregistrement', async () => {
+    const dbName = `sync-error-db-${crypto.randomUUID()}`
+    createdDbNames.push(dbName)
+
+    const db = new SubscriptionDatabase({
+      name: dbName,
+      skipCloud: true,
+    })
+
+    await db.open()
+    await createSubscription(
+      {
+        name: 'Claude Plus',
+        status: 'ACTIVE',
+        renewalMode: 'AUTOMATIC',
+      },
+      db,
+    )
+
+    const syncError = new Error('sync failed')
+    const syncMock = vi.fn().mockRejectedValue(syncError)
+
+    await expect(syncMock()).rejects.toThrow('sync failed')
+
+    const subscriptions = await listSubscriptions({}, db)
+    expect(subscriptions).toHaveLength(1)
+    expect(subscriptions[0].name).toBe('Claude Plus')
 
     db.close()
   })

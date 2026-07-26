@@ -15,14 +15,14 @@ describe('App', () => {
     expect(
       screen.getByRole('heading', {
         level: 2,
-        name: 'Aucun abonnement enregistré',
+        name: 'Liste des abonnements',
       }),
     ).toBeInTheDocument()
     expect(screen.getByLabelText("Nombre d'abonnements")).toHaveTextContent(
       '0 abonnement',
     )
     expect(
-      screen.getByText('Vos abonnements apparaîtront ici.'),
+      screen.getByText('Aucun abonnement ne correspond aux filtres.'),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('region', { name: 'Statut global de synchronisation' }),
@@ -32,6 +32,9 @@ describe('App', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByRole('heading', { level: 2, name: 'Diagnostic' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'À compléter' }),
     ).toBeInTheDocument()
   })
 })

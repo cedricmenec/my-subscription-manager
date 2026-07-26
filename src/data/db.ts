@@ -22,11 +22,32 @@ export type SubscriptionStatus =
 
 export type RenewalMode = 'AUTOMATIC' | 'MANUAL' | 'UNKNOWN'
 
+export type BillingInterval = 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'UNKNOWN'
+
+export interface Category extends SyncedEntity {
+  name: string
+  sortOrder?: number
+}
+
 export interface Subscription extends SyncedEntity {
   name: string
+  provider?: string
+  planName?: string
+  categoryId?: string
   status: SubscriptionStatus
+  archivedAt?: Date
+  currentPriceMinor?: number
+  currency?: string
+  billingInterval?: BillingInterval
   renewalMode: RenewalMode
+  startDate?: string
   nextChargeDate?: string
+  pauseUntil?: string
+  serviceEndDate?: string
+  managementUrl?: string
+  cancellationUrl?: string
+  cancellationInstructions?: string
+  notes?: string
 }
 
 export interface AppSettings extends SyncedEntity {
@@ -64,20 +85,58 @@ function resolveCloudUrl(value?: string): string {
 
 export class SubscriptionDatabase extends Dexie {
   subscriptions!: DexieCloudTable<Subscription, 'id'>
+  categories!: DexieCloudTable<Category, 'id'>
   settings!: DexieCloudTable<AppSettings, 'id'>
 
   localSettings!: Table<LocalSetting, string>
   diagnosticLogs!: Table<DiagnosticLog, number>
 
   constructor(options: SubscriptionDatabaseOptions = {}) {
-    super(options.name ?? DEFAULT_DB_NAME, { addons: [dexieCloud] })
+    super(
+      options.name ?? DEFAULT_DB_NAME,
+      options.skipCloud ? undefined : { addons: [dexieCloud] },
+    )
+
+    const syncedPrimaryKey = options.skipCloud ? 'id' : '@id'
 
     this.version(1).stores({
-      subscriptions: '@id, status, renewalMode, nextChargeDate, updatedAt, deletedAt',
-      settings: '@id, &key, updatedAt',
+      subscriptions: `${syncedPrimaryKey}, status, renewalMode, nextChargeDate, updatedAt, deletedAt`,
+      settings: `${syncedPrimaryKey}, &key, updatedAt`,
       localSettings: '&key, updatedAt',
       diagnosticLogs: '++id, timestamp, category',
     })
+
+    this.version(2)
+      .stores({
+        subscriptions:
+          `${syncedPrimaryKey}, status, categoryId, renewalMode, billingInterval, nextChargeDate, updatedAt, archivedAt, deletedAt`,
+        categories: `${syncedPrimaryKey}, &name, sortOrder, updatedAt`,
+        settings: `${syncedPrimaryKey}, &key, updatedAt`,
+        localSettings: '&key, updatedAt',
+        diagnosticLogs: '++id, timestamp, category',
+      })
+      .upgrade(tx =>
+        tx
+          .table('subscriptions')
+          .toCollection()
+          .modify((subscription: Partial<Subscription>) => {
+            if (!subscription.status) {
+              subscription.status = 'UNKNOWN'
+            }
+
+            if (!subscription.renewalMode) {
+              subscription.renewalMode = 'UNKNOWN'
+            }
+
+            if (!subscription.schemaVersion || subscription.schemaVersion < 2) {
+              subscription.schemaVersion = 2
+            }
+
+            if (!subscription.updatedAt) {
+              subscription.updatedAt = new Date()
+            }
+          }),
+      )
 
     if (!options.skipCloud) {
       this.cloud.configure({
