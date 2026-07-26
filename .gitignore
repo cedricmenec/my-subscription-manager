@@ -11,6 +11,7 @@ coverage/
 *.local
 *.log
 dexie-cloud.key
+dexie-cloud.json
 
 .idea/
 .vscode/

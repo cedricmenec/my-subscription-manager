@@ -24,5 +24,14 @@ describe('App', () => {
     expect(
       screen.getByText('Vos abonnements apparaîtront ici.'),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('region', { name: 'Statut global de synchronisation' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Synchroniser maintenant' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Diagnostic' }),
+    ).toBeInTheDocument()
   })
 })
