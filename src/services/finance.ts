@@ -1,5 +1,6 @@
 import {
   type IntervalUnit,
+  type LegacyBillingInterval,
   type Payment,
   type PaymentStatus,
   type Subscription,
@@ -10,6 +11,7 @@ import {
   compareCivilDates,
   todayCivilDate,
 } from './civilDate'
+import { isValidCivilDate } from './subscriptionValidation'
 
 export interface ProjectedPaymentDraft {
   subscriptionId: string
@@ -18,6 +20,49 @@ export interface ProjectedPaymentDraft {
   amount: {
     amountMinor: number
     currency: string
+  }
+}
+
+export interface ExcludedSubscriptionInfo {
+  id: string
+  reason: string
+}
+
+export interface FinancialSummary {
+  baseCurrency: string
+  monthlyEquivalentMinor: number
+  annualEquivalentMinor: number
+  projected30Minor: number
+  projected90Minor: number
+  expensesYearToDateMinor: number
+  includedSubscriptionCount: number
+  excludedCurrencySubscriptionCount: number
+  excludedSubscriptions: ExcludedSubscriptionInfo[]
+}
+
+export interface ExchangeRateValidationResult {
+  isValid: boolean
+  errors: Record<string, string>
+}
+
+export function validateExchangeRate(currency: string, rate: number): ExchangeRateValidationResult {
+  const errors: Record<string, string> = {}
+
+  if (!currency || currency.trim().length === 0) {
+    errors.currency = 'Le code devise est obligatoire.'
+  } else if (currency.trim().length !== 3) {
+    errors.currency = 'Le code devise doit comporter 3 caractères (ex: USD).'
+  }
+
+  if (typeof rate !== 'number' || !Number.isFinite(rate)) {
+    errors.rate = 'Le taux doit être un nombre valide.'
+  } else if (rate <= 0) {
+    errors.rate = 'Le taux doit être un nombre strictement positif.'
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
   }
 }
 
@@ -30,21 +75,17 @@ export interface FinancialSummary {
   expensesYearToDateMinor: number
   includedSubscriptionCount: number
   excludedCurrencySubscriptionCount: number
+  excludedSubscriptions: ExcludedSubscriptionInfo[]
 }
 
 export function computeEquivalentMonthlyCost(subscription: Subscription): number | undefined {
-  if (
-    typeof subscription.currentPriceMinor !== 'number' ||
-    !subscription.billingIntervalUnit ||
-    !subscription.billingIntervalCount
-  ) {
+  const interval = resolveBillingInterval(subscription)
+
+  if (typeof subscription.currentPriceMinor !== 'number' || !interval) {
     return undefined
   }
 
-  const months = intervalToMonths(
-    subscription.billingIntervalUnit,
-    subscription.billingIntervalCount,
-  )
+  const months = intervalToMonths(interval.unit, interval.count)
 
   if (!months || months <= 0) {
     return undefined
@@ -63,13 +104,15 @@ export function projectSubscriptionPayments(
   windowStart: string,
   windowEnd: string,
 ): ProjectedPaymentDraft[] {
-  if (!canProjectSubscription(subscription)) {
+  const interval = resolveBillingInterval(subscription)
+
+  if (!interval || !canProjectSubscription(subscription, interval)) {
     return []
   }
 
   const projected: ProjectedPaymentDraft[] = []
-  const stepUnit = subscription.billingIntervalUnit as IntervalUnit
-  const stepCount = subscription.billingIntervalCount as number
+  const stepUnit = interval.unit
+  const stepCount = interval.count
   const amountMinor = subscription.currentPriceMinor as number
   const currency = subscription.currency as string
   let candidateDate = subscription.nextChargeDate as string
@@ -112,6 +155,7 @@ export function buildFinancialSummary(options: {
   payments: Payment[]
   baseCurrency: string
   referenceDate?: string
+  exchangeRates?: Record<string, number>
 }): FinancialSummary {
   const referenceDate = options.referenceDate ?? todayCivilDate()
   const yearStart = `${referenceDate.slice(0, 4)}-01-01`
@@ -122,13 +166,26 @@ export function buildFinancialSummary(options: {
   let annualEquivalentMinor = 0
   let includedSubscriptionCount = 0
   let excludedCurrencySubscriptionCount = 0
+  const excludedSubscriptions: ExcludedSubscriptionInfo[] = []
 
   for (const subscription of options.subscriptions) {
     if (!isRecurringCostEligible(subscription)) {
       continue
     }
 
-    if (subscription.currency !== options.baseCurrency) {
+    if (!subscription.currency) {
+      excludedSubscriptions.push({ id: subscription.id, reason: 'Aucune devise définie' })
+      excludedCurrencySubscriptionCount += 1
+      continue
+    }
+
+    const rate = options.exchangeRates?.[subscription.currency]
+
+    if (subscription.currency !== options.baseCurrency && !rate) {
+      excludedSubscriptions.push({
+        id: subscription.id,
+        reason: `Devise ${subscription.currency} non convertible (aucun taux configuré)`,
+      })
       excludedCurrencySubscriptionCount += 1
       continue
     }
@@ -137,8 +194,11 @@ export function buildFinancialSummary(options: {
     const annualCost = computeEquivalentAnnualCost(subscription)
 
     if (typeof monthlyCost === 'number' && typeof annualCost === 'number') {
-      monthlyEquivalentMinor += monthlyCost
-      annualEquivalentMinor += annualCost
+      const convertedMonthly = rate ? Math.round(monthlyCost * rate) : monthlyCost
+      const convertedAnnual = rate ? Math.round(annualCost * rate) : annualCost
+
+      monthlyEquivalentMinor += convertedMonthly
+      annualEquivalentMinor += convertedAnnual
       includedSubscriptionCount += 1
     }
   }
@@ -157,10 +217,14 @@ export function buildFinancialSummary(options: {
     ),
     includedSubscriptionCount,
     excludedCurrencySubscriptionCount,
+    excludedSubscriptions,
   }
 }
 
-function canProjectSubscription(subscription: Subscription): boolean {
+function canProjectSubscription(
+  subscription: Subscription,
+  interval: { unit: IntervalUnit; count: number },
+): boolean {
   if (subscription.archivedAt || subscription.deletedAt) {
     return false
   }
@@ -177,13 +241,65 @@ function canProjectSubscription(subscription: Subscription): boolean {
     typeof subscription.currentPriceMinor === 'number' &&
       subscription.currency &&
       subscription.nextChargeDate &&
-      subscription.billingIntervalUnit &&
-      subscription.billingIntervalCount,
+      isValidCivilDate(subscription.nextChargeDate) &&
+      (!subscription.pauseUntil || isValidCivilDate(subscription.pauseUntil)) &&
+      (!subscription.serviceEndDate || isValidCivilDate(subscription.serviceEndDate)) &&
+      interval,
   )
 }
 
 function isRecurringCostEligible(subscription: Subscription): boolean {
-  return subscription.status === 'ACTIVE' || subscription.status === 'TRIAL'
+  if (subscription.archivedAt || subscription.deletedAt) {
+    return false
+  }
+
+  if (subscription.status === 'ENDED') {
+    return false
+  }
+
+  if (subscription.status === 'CANCELLED_PENDING_END' && !subscription.serviceEndDate) {
+    return false
+  }
+
+  return true
+}
+
+function resolveBillingInterval(
+  subscription: Subscription,
+): { unit: IntervalUnit; count: number } | undefined {
+  if (subscription.billingIntervalUnit) {
+    const count =
+      typeof subscription.billingIntervalCount === 'number' &&
+      Number.isInteger(subscription.billingIntervalCount) &&
+      subscription.billingIntervalCount > 0
+        ? subscription.billingIntervalCount
+        : 1
+
+    return {
+      unit: subscription.billingIntervalUnit,
+      count,
+    }
+  }
+
+  const legacy = mapLegacyInterval(
+    (subscription as Subscription & { billingInterval?: LegacyBillingInterval }).billingInterval,
+  )
+  return legacy
+}
+
+function mapLegacyInterval(
+  legacy?: LegacyBillingInterval,
+): { unit: IntervalUnit; count: number } | undefined {
+  switch (legacy) {
+    case 'WEEKLY':
+      return { unit: 'WEEK', count: 1 }
+    case 'MONTHLY':
+      return { unit: 'MONTH', count: 1 }
+    case 'YEARLY':
+      return { unit: 'YEAR', count: 1 }
+    default:
+      return undefined
+  }
 }
 
 function intervalToMonths(unit: IntervalUnit, count: number): number | undefined {

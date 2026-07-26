@@ -37,6 +37,7 @@ import {
   type SubscriptionValidationError,
   updateSubscription,
 } from './services/subscriptions'
+import { validateExchangeRate } from './services/finance'
 
 type OperationStatus =
   | 'aucune-operation'
@@ -54,6 +55,7 @@ interface FinancialSummaryState {
   expensesYearToDateMinor: number
   includedSubscriptionCount: number
   excludedCurrencySubscriptionCount: number
+  excludedSubscriptions: Array<{ id: string; reason: string }>
 }
 
 interface SubscriptionFormState {
@@ -131,6 +133,7 @@ const EMPTY_SUMMARY: FinancialSummaryState = {
   expensesYearToDateMinor: 0,
   includedSubscriptionCount: 0,
   excludedCurrencySubscriptionCount: 0,
+  excludedSubscriptions: [],
 }
 
 const EMPTY_FORM: SubscriptionFormState = {
@@ -285,6 +288,10 @@ function App() {
   const [renewalFilter, setRenewalFilter] = useState<RenewalMode | 'ALL'>('ALL')
   const [sortBy, setSortBy] = useState<SubscriptionSort>('nextChargeDate')
   const [onlyIncomplete, setOnlyIncomplete] = useState(false)
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({})
+  const [newExchangeCurrency, setNewExchangeCurrency] = useState('')
+  const [newExchangeRate, setNewExchangeRate] = useState('')
+  const [exchangeRateErrors, setExchangeRateErrors] = useState<Record<string, string>>({})
 
   const appSyncStatus = useMemo(() => mapSyncStateToAppStatus(syncState), [syncState])
 
@@ -325,23 +332,40 @@ function App() {
 
   useEffect(() => {
     async function loadContextData() {
-      const [loadedSubscriptions, loadedCategories] = await Promise.all([
-        listSubscriptions(filters),
-        listCategories(),
-      ])
+      try {
+        const [loadedSubscriptions, loadedCategories] = await Promise.all([
+          listSubscriptions(filters),
+          listCategories(),
+        ])
 
-      setSubscriptions(loadedSubscriptions)
-      setCategories(loadedCategories.map(category => ({ id: category.id, name: category.name })))
+        setSubscriptions(loadedSubscriptions)
+        setCategories(loadedCategories.map(category => ({ id: category.id, name: category.name })))
 
-      await materializeProjectedPayments()
+        try {
+          await materializeProjectedPayments()
+        } catch (error) {
+          console.error('materializeProjectedPayments failed during initial load', error)
+          setFeedback('Impossible de générer certaines échéances. Les données affichées restent disponibles.')
+        }
 
-      const [loadedPayments, loadedSummary] = await Promise.all([
-        listPayments(),
-        getFinancialSummary(),
-      ])
+        const [loadedPayments, loadedSummary] = await Promise.all([
+          listPayments(),
+          getFinancialSummary(),
+        ])
 
-      setPayments(loadedPayments)
-      setSummary(loadedSummary)
+        setPayments(loadedPayments)
+        setSummary(loadedSummary)
+
+        const settings = await db.settings.where('key').equals('main').first()
+        if (settings?.exchangeRates) {
+          setExchangeRates(settings.exchangeRates)
+        }
+      } catch (error) {
+        console.error('loadContextData failed', error)
+        setFeedback(
+          `Chargement impossible: ${error instanceof Error ? error.message : 'erreur inconnue'}`,
+        )
+      }
     }
 
     void loadContextData()
@@ -367,10 +391,23 @@ function App() {
   }
 
   async function refreshFinance() {
-    await materializeProjectedPayments()
-    const [loadedPayments, loadedSummary] = await Promise.all([listPayments(), getFinancialSummary()])
-    setPayments(loadedPayments)
-    setSummary(loadedSummary)
+    try {
+      await materializeProjectedPayments()
+    } catch (error) {
+      console.error('materializeProjectedPayments failed during refresh', error)
+      setFeedback('Impossible de générer certaines échéances. Les données affichées restent disponibles.')
+    }
+
+    try {
+      const [loadedPayments, loadedSummary] = await Promise.all([listPayments(), getFinancialSummary()])
+      setPayments(loadedPayments)
+      setSummary(loadedSummary)
+    } catch (error) {
+      console.error('refreshFinance failed', error)
+      setFeedback(
+        `Impossible d'actualiser les finances: ${error instanceof Error ? error.message : 'erreur inconnue'}`,
+      )
+    }
   }
 
   function updateFormField<K extends keyof SubscriptionFormState>(
@@ -451,6 +488,79 @@ function App() {
     } catch (error) {
       setFeedback(
         `Synchronisation impossible: ${error instanceof Error ? error.message : 'erreur inconnue'}`,
+      )
+    }
+  }
+
+  async function handleAddExchangeRate() {
+    setExchangeRateErrors({})
+
+    const trimmedCurrency = newExchangeCurrency.trim().toUpperCase()
+    const parsedRate = newExchangeRate.trim() ? Number(newExchangeRate.trim()) : NaN
+
+    const validation = validateExchangeRate(trimmedCurrency, parsedRate)
+    if (!validation.isValid) {
+      setExchangeRateErrors(validation.errors)
+      return
+    }
+
+    const updatedRates = { ...exchangeRates, [trimmedCurrency]: parsedRate }
+    setExchangeRates(updatedRates)
+    setNewExchangeCurrency('')
+    setNewExchangeRate('')
+    setExchangeRateErrors({})
+    setFeedback(`Taux de conversion ${trimmedCurrency}→EUR: ${parsedRate} enregistré.`)
+
+    try {
+      const settings = await db.settings.where('key').equals('main').first()
+      if (settings) {
+        await db.settings.update(settings.id, {
+          exchangeRates: updatedRates,
+          updatedAt: new Date(),
+          schemaVersion: 3,
+        })
+      } else {
+        const now = new Date()
+        await db.settings.put({
+          id: `settings-${crypto.randomUUID()}`,
+          key: 'main',
+          baseCurrency: 'EUR',
+          timezone: 'Europe/Paris',
+          paymentAssumptionEnabled: false,
+          paymentAssumptionDelayDays: 5,
+          exchangeRates: updatedRates,
+          createdAt: now,
+          updatedAt: now,
+          schemaVersion: 3,
+        })
+      }
+      setOperationStatus('enregistre-localement')
+    } catch (error) {
+      setFeedback(
+        `Impossible de sauvegarder le taux: ${error instanceof Error ? error.message : 'erreur inconnue'}`,
+      )
+    }
+  }
+
+  async function handleRemoveExchangeRate(currency: string) {
+    const updatedRates = { ...exchangeRates }
+    delete updatedRates[currency]
+    setExchangeRates(updatedRates)
+    setFeedback(`Taux de conversion ${currency} supprimé.`)
+
+    try {
+      const settings = await db.settings.where('key').equals('main').first()
+      if (settings) {
+        await db.settings.update(settings.id, {
+          exchangeRates: updatedRates,
+          updatedAt: new Date(),
+          schemaVersion: 3,
+        })
+      }
+      setOperationStatus('enregistre-localement')
+    } catch (error) {
+      setFeedback(
+        `Impossible de supprimer le taux: ${error instanceof Error ? error.message : 'erreur inconnue'}`,
       )
     }
   }
@@ -588,6 +698,52 @@ function App() {
           </button>
         </section>
 
+        <section className="control-card" aria-labelledby="exchange-rates-title">
+          <h2 id="exchange-rates-title">Taux de conversion</h2>
+          <p>Configurez les taux de conversion pour inclure les abonnements en devise étrangère dans les totaux consolidés (1 unité devise = X EUR).</p>
+          {Object.keys(exchangeRates).length > 0 ? (
+            <ul className="payment-list">
+              {Object.entries(exchangeRates).map(([currency, rate]) => (
+                <li key={currency} className="payment-item">
+                  <div>
+                    <p className="payment-status payment-status-confirmed_paid">{currency} → EUR</p>
+                    <p>Taux: {rate}</p>
+                  </div>
+                  <div className="button-row">
+                    <button type="button" className="danger-button" onClick={() => void handleRemoveExchangeRate(currency)}>
+                      Supprimer
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Aucun taux de conversion configuré. Les abonnements en devise étrangère sont exclus des totaux.</p>
+          )}
+          <div className="category-row">
+            <input
+              value={newExchangeCurrency}
+              onChange={event => setNewExchangeCurrency(event.target.value)}
+              placeholder="Devise (ex: USD)"
+              maxLength={3}
+              style={{ textTransform: 'uppercase' }}
+            />
+            <input
+              value={newExchangeRate}
+              onChange={event => setNewExchangeRate(event.target.value)}
+              placeholder="Taux (ex: 0.92)"
+              type="number"
+              step="any"
+              min="0"
+            />
+            <button type="button" onClick={() => void handleAddExchangeRate()}>
+              Ajouter
+            </button>
+          </div>
+          {exchangeRateErrors.currency ? <span className="field-error">{exchangeRateErrors.currency}</span> : null}
+          {exchangeRateErrors.rate ? <span className="field-error">{exchangeRateErrors.rate}</span> : null}
+        </section>
+
         <section className="summary-grid" aria-labelledby="financial-summary-title">
           <article className="summary-card">
             <p className="status-title">Coût mensuel équivalent</p>
@@ -599,7 +755,15 @@ function App() {
           <article className="summary-card">
             <p className="status-title">Coût annuel équivalent</p>
             <h2>{formatMoneyMinor(summary.annualEquivalentMinor, summary.baseCurrency)}</h2>
-            <p>Base consolidée: {summary.baseCurrency}</p>
+            <p>
+              Base consolidée: {summary.baseCurrency}
+              {summary.excludedCurrencySubscriptionCount > 0
+                ? ` | ${summary.excludedCurrencySubscriptionCount} exclu(s)`
+                : ''}
+              {Object.keys(exchangeRates).length > 0
+                ? ` | ${Object.keys(exchangeRates).length} taux configuré(s)`
+                : ''}
+            </p>
           </article>
           <article className="summary-card">
             <p className="status-title">Décaissements à 30 jours</p>
@@ -733,11 +897,34 @@ function App() {
             <ul className="subscription-list">
               {subscriptions.map(subscription => {
                 const completion = computeSubscriptionCompletion(subscription)
+                const exclusion = summary.excludedSubscriptions.find(ex => ex.id === subscription.id)
+                const subCurrency = subscription.currency
+                const hasConversion = Boolean(
+                  !exclusion &&
+                    subCurrency &&
+                    subCurrency !== summary.baseCurrency &&
+                    exchangeRates[subCurrency],
+                )
 
                 return (
                   <li key={subscription.id} className="subscription-item">
                     <div>
-                      <h3>{subscription.name}</h3>
+                      <h3>
+                        {subscription.name}
+                        {exclusion ? (
+                          <span className="exclusion-badge" title={exclusion.reason}>
+                            ⚠️ Exclu
+                          </span>
+                        ) : null}
+                        {hasConversion && subCurrency ? (
+                          <span
+                            className="conversion-badge"
+                            title={`Taux ${subCurrency}→${summary.baseCurrency}: ${exchangeRates[subCurrency]}`}
+                          >
+                            💱 Converti
+                          </span>
+                        ) : null}
+                      </h3>
                       <p>
                         Statut: {STATUS_LABELS[subscription.status]} | Renouvellement:{' '}
                         {RENEWAL_LABELS[subscription.renewalMode]}
@@ -1018,10 +1205,19 @@ function App() {
             </ul>
           )}
           {summary.excludedCurrencySubscriptionCount > 0 ? (
-            <p className="feedback">
-              {summary.excludedCurrencySubscriptionCount} abonnement(s) sont exclus des totaux
-              consolidés faute de devise comparable.
-            </p>
+            <details className="exclusion-details">
+              <summary>{summary.excludedCurrencySubscriptionCount} abonnement(s) exclu(s) des totaux consolidés</summary>
+              <ul className="incomplete-list">
+                {summary.excludedSubscriptions.map(ex => {
+                  const sub = subscriptions.find(s => s.id === ex.id)
+                  return (
+                    <li key={ex.id}>
+                      <strong>{sub?.name ?? ex.id}</strong>: {ex.reason}
+                    </li>
+                  )
+                })}
+              </ul>
+            </details>
           ) : null}
         </section>
 

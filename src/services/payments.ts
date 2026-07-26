@@ -30,46 +30,69 @@ export async function materializeProjectedPayments(
   const horizonDays = options.horizonDays ?? 90
   const windowEnd = addDaysToCivilDate(referenceDate, horizonDays)
   const now = new Date()
-
-  const [subscriptions, existingPayments] = await Promise.all([
-    database.subscriptions.toArray(),
-    database.payments.toArray(),
-  ])
-
-  const existingKeys = new Set(
-    existingPayments.map(payment => `${payment.subscriptionId}:${payment.scheduledDate}`),
-  )
-
   const createdPayments: Payment[] = []
 
-  await database.transaction('rw', database.payments, async () => {
-    for (const subscription of subscriptions) {
-      const projected = projectSubscriptionPayments(subscription, referenceDate, windowEnd)
+  try {
+    const [subscriptions, existingPayments] = await Promise.all([
+      database.subscriptions.toArray(),
+      database.payments.toArray(),
+    ])
 
-      for (const candidate of projected) {
-        const key = `${candidate.subscriptionId}:${candidate.scheduledDate}`
-        if (existingKeys.has(key)) {
+    const existingKeys = new Set(
+      existingPayments.map(payment => `${payment.subscriptionId}:${payment.scheduledDate}`),
+    )
+
+    await database.transaction('rw', database.payments, async () => {
+      for (const subscription of subscriptions) {
+        if (!subscription.id) {
           continue
         }
 
-        const payment: Payment = {
-          id: createEntityId('pmt'),
-          subscriptionId: candidate.subscriptionId,
-          scheduledDate: candidate.scheduledDate,
-          status: candidate.status,
-          amount: candidate.amount,
-          source: 'GENERATED',
-          createdAt: now,
-          updatedAt: now,
-          schemaVersion: 3,
+        let projected: ReturnType<typeof projectSubscriptionPayments>
+
+        try {
+          projected = projectSubscriptionPayments(subscription, referenceDate, windowEnd)
+        } catch (error) {
+          // Ignore malformed legacy records and continue materializing valid subscriptions.
+          console.error('Projection skipped for subscription', subscription.id, error)
+          continue
         }
 
-        await database.payments.put(payment)
-        existingKeys.add(key)
-        createdPayments.push(payment)
+        for (const candidate of projected) {
+          const key = `${candidate.subscriptionId}:${candidate.scheduledDate}`
+          if (existingKeys.has(key)) {
+            continue
+          }
+
+          const payment: Payment = {
+            id: createEntityId('pmt'),
+            subscriptionId: candidate.subscriptionId,
+            scheduledDate: candidate.scheduledDate,
+            status: candidate.status,
+            amount: candidate.amount,
+            source: 'GENERATED',
+            createdAt: now,
+            updatedAt: now,
+            schemaVersion: 3,
+          }
+
+          try {
+            await database.payments.put(payment)
+            existingKeys.add(key)
+            createdPayments.push(payment)
+          } catch (error) {
+            console.error('Payment materialization put failed', {
+              subscriptionId: subscription.id,
+              scheduledDate: candidate.scheduledDate,
+              error,
+            })
+          }
+        }
       }
-    }
-  })
+    })
+  } catch (error) {
+    console.error('materializeProjectedPayments failed', error)
+  }
 
   return createdPayments
 }
@@ -147,5 +170,6 @@ export async function getFinancialSummary(
     payments,
     baseCurrency: settings?.baseCurrency ?? 'EUR',
     referenceDate,
+    exchangeRates: settings?.exchangeRates,
   })
 }

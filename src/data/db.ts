@@ -89,6 +89,7 @@ export interface AppSettings extends SyncedEntity {
   timezone: string
   paymentAssumptionEnabled: boolean
   paymentAssumptionDelayDays: number
+  exchangeRates?: Record<string, number>
 }
 
 export interface LocalSetting {

@@ -5,6 +5,7 @@ import {
   computeEquivalentAnnualCost,
   computeEquivalentMonthlyCost,
   projectSubscriptionPayments,
+  validateExchangeRate,
 } from './finance'
 
 describe('finance helpers', () => {
@@ -110,5 +111,145 @@ describe('finance helpers', () => {
     expect(summary.projected30Minor).toBe(1000)
     expect(summary.projected90Minor).toBe(1000)
     expect(summary.expensesYearToDateMinor).toBe(1000)
+  })
+})
+
+describe('taux de conversion', () => {
+  it('valide un taux correct', () => {
+    const result = validateExchangeRate('USD', 0.92)
+    expect(result.isValid).toBe(true)
+    expect(result.errors).toEqual({})
+  })
+
+  it('rejette un code devise vide', () => {
+    const result = validateExchangeRate('', 0.92)
+    expect(result.isValid).toBe(false)
+    expect(result.errors.currency).toBe('Le code devise est obligatoire.')
+  })
+
+  it('rejette un code devise de longueur incorrecte', () => {
+    const result = validateExchangeRate('US', 0.92)
+    expect(result.isValid).toBe(false)
+    expect(result.errors.currency).toBe('Le code devise doit comporter 3 caractères (ex: USD).')
+  })
+
+  it('rejette un taux négatif', () => {
+    const result = validateExchangeRate('USD', -0.5)
+    expect(result.isValid).toBe(false)
+    expect(result.errors.rate).toBe('Le taux doit être un nombre strictement positif.')
+  })
+
+  it('rejette un taux nul', () => {
+    const result = validateExchangeRate('USD', 0)
+    expect(result.isValid).toBe(false)
+    expect(result.errors.rate).toBe('Le taux doit être un nombre strictement positif.')
+  })
+
+  it('convertit un abonnement USD en EUR dans buildFinancialSummary', () => {
+    const subscriptions = [
+      {
+        id: 'sbs-usd',
+        name: 'Service USD',
+        status: 'ACTIVE' as const,
+        renewalMode: 'AUTOMATIC' as const,
+        currentPriceMinor: 1000,
+        currency: 'USD',
+        billingIntervalUnit: 'MONTH' as const,
+        billingIntervalCount: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        schemaVersion: 3,
+      },
+    ]
+
+    const summary = buildFinancialSummary({
+      subscriptions,
+      payments: [],
+      baseCurrency: 'EUR',
+      exchangeRates: { USD: 0.92 },
+      referenceDate: '2026-07-26',
+    })
+
+    expect(summary.monthlyEquivalentMinor).toBe(920)
+    expect(summary.annualEquivalentMinor).toBe(11040)
+    expect(summary.includedSubscriptionCount).toBe(1)
+    expect(summary.excludedCurrencySubscriptionCount).toBe(0)
+    expect(summary.excludedSubscriptions).toHaveLength(0)
+  })
+
+  it('exclut un abonnement USD si aucun taux configuré', () => {
+    const subscriptions = [
+      {
+        id: 'sbs-usd',
+        name: 'Service USD',
+        status: 'ACTIVE' as const,
+        renewalMode: 'AUTOMATIC' as const,
+        currentPriceMinor: 1000,
+        currency: 'USD',
+        billingIntervalUnit: 'MONTH' as const,
+        billingIntervalCount: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        schemaVersion: 3,
+      },
+    ]
+
+    const summary = buildFinancialSummary({
+      subscriptions,
+      payments: [],
+      baseCurrency: 'EUR',
+      referenceDate: '2026-07-26',
+    })
+
+    expect(summary.monthlyEquivalentMinor).toBe(0)
+    expect(summary.includedSubscriptionCount).toBe(0)
+    expect(summary.excludedCurrencySubscriptionCount).toBe(1)
+    expect(summary.excludedSubscriptions).toHaveLength(1)
+    expect(summary.excludedSubscriptions[0].id).toBe('sbs-usd')
+    expect(summary.excludedSubscriptions[0].reason).toContain('USD')
+  })
+
+  it('mélange EUR et USD converti dans les totaux', () => {
+    const subscriptions = [
+      {
+        id: 'sbs-eur',
+        name: 'Mensuel EUR',
+        status: 'ACTIVE' as const,
+        renewalMode: 'AUTOMATIC' as const,
+        currentPriceMinor: 1000,
+        currency: 'EUR',
+        billingIntervalUnit: 'MONTH' as const,
+        billingIntervalCount: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        schemaVersion: 3,
+      },
+      {
+        id: 'sbs-usd',
+        name: 'Mensuel USD',
+        status: 'ACTIVE' as const,
+        renewalMode: 'AUTOMATIC' as const,
+        currentPriceMinor: 2000,
+        currency: 'USD',
+        billingIntervalUnit: 'MONTH' as const,
+        billingIntervalCount: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        schemaVersion: 3,
+      },
+    ]
+
+    const summary = buildFinancialSummary({
+      subscriptions,
+      payments: [],
+      baseCurrency: 'EUR',
+      exchangeRates: { USD: 0.92 },
+      referenceDate: '2026-07-26',
+    })
+
+    // EUR: 1000 + USD: 2000 * 0.92 = 1840 = 2840
+    expect(summary.monthlyEquivalentMinor).toBe(2840)
+    expect(summary.includedSubscriptionCount).toBe(2)
+    expect(summary.excludedCurrencySubscriptionCount).toBe(0)
   })
 })

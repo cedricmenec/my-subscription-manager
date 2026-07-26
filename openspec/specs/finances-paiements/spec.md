@@ -39,7 +39,7 @@ L'application SHALL calculer localement les prochaines échéances financières 
 
 ### Requirement: Calcul des indicateurs financiers du Lot 3
 
-L'application SHALL calculer le coût mensuel équivalent, le coût annuel équivalent, les décaissements prévus à 30 et 90 jours et les dépenses sur période à partir des abonnements et paiements, conformément à la section 9.2, OBJ-MET-001 et AC-010.
+L'application SHALL calculer le coût mensuel équivalent, le coût annuel équivalent, les décaissements prévus à 30 et 90 jours et les dépenses sur période à partir des abonnements et paiements, conformément à la section 9.2, OBJ-MET-001 et AC-010. L'application SHALL également appliquer les taux de conversion configurés pour inclure les abonnements en devise étrangère dans les totaux consolidés, et SHALL exposer la liste des abonnements exclus avec leur motif d'exclusion.
 
 #### Scenario: Coût équivalent d'un abonnement annuel
 
@@ -53,6 +53,20 @@ L'application SHALL calculer le coût mensuel équivalent, le coût annuel équi
 - **THEN** les dépenses incluent les montants supposés et confirmés
 - **AND** les remboursements diminuent le total
 - **AND** les paiements `PROJECTED` ne sont pas comptés comme dépense réalisée
+
+#### Scenario: Abonnement USD inclus avec taux de conversion
+
+- **WHEN** un abonnement est facturé 1000 centimes USD et un taux de conversion USD→EUR de 0.92 est configuré
+- **THEN** le coût mensuel équivalent est calculé en convertissant le montant en EUR via le taux
+- **AND** l'abonnement est compté dans `includedSubscriptionCount`
+- **AND** le montant converti contribue aux totaux `monthlyEquivalentMinor` et `annualEquivalentMinor`
+
+#### Scenario: Abonnement exclu faute de taux de conversion
+
+- **WHEN** un abonnement utilise une devise étrangère sans taux de conversion configuré
+- **THEN** l'abonnement est exclu des totaux consolidés
+- **AND** il apparaît dans la liste des exclus avec le motif "devise non convertible"
+- **AND** le compteur `excludedCurrencySubscriptionCount` est incrémenté
 
 ### Requirement: Correction manuelle sans perte d'historique
 
@@ -84,10 +98,10 @@ L'application SHALL afficher un résumé financier local-first distinguant coût
 
 ### Requirement: Limites explicites du premier incrément
 
-Le premier incrément de cette capacité MUST limiter ses calculs aux cas déterministes du MVP et SHALL conserver les cas complexes comme amélioration future documentée, notamment les promotions, essais, taux de change consolidés et renouvellements contractuels divergents, conformément au choix de lot incrémental décrit dans la proposition.
+Le premier incrément de cette capacité MUST limiter ses calculs aux cas déterministes du MVP et SHALL conserver les cas complexes comme amélioration future documentée, notamment les promotions, essais et renouvellements contractuels divergents, conformément au choix de lot incrémental décrit dans la proposition.
 
-#### Scenario: Cas complexe hors périmètre
+#### Scenario: Conversion de devise incluse dans le périmètre MVP
 
-- **WHEN** un abonnement nécessiterait une conversion de devise consolidée ou une promotion à deux tarifs
-- **THEN** l'application continue d'afficher le montant et la devise d'origine disponibles
-- **AND** elle n'introduit pas de calcul consolidé approximatif non justifié
+- **WHEN** un abonnement nécessite une conversion de devise avec un taux statique configuré
+- **THEN** l'application applique la conversion et inclut le montant dans les totaux
+- **AND** le calcul reste déterministe et basé sur les données locales
