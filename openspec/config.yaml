@@ -1,0 +1,60 @@
+schema: spec-driven
+
+context: |
+  Product: "Gestion des abonnements" ("Abos"), a personal subscription manager.
+  Source of truth: specification_gestion_abonnements_dexie_cloud.md.
+  Language: write project artifacts and user-facing text in French.
+  User interface language: all visible interface text must be in French.
+  Reference timezone: Europe/Paris.
+  Consolidation currency: EUR.
+
+  Architecture:
+  - Static browser-only React and TypeScript application built with Vite.
+  - Installable PWA with offline launch after the first successful online use.
+  - IndexedDB is the local source of truth; access it exclusively through Dexie.js.
+  - Use dexie-cloud-addon for authentication and multi-device synchronization.
+  - Configure Dexie Cloud with requireAuth: true.
+  - Use n8n only for scheduled processing and external integrations.
+  - Do not create a custom application backend, API, or server-side business database.
+  - Production output must be a self-contained static dist directory.
+
+  Domain and data conventions:
+  - Store monetary values as integer minor units with an ISO currency code.
+  - Store civil contract dates as YYYY-MM-DD without implicit timezone conversion.
+  - Separate billing, commitment, and contractual renewal intervals.
+  - Preserve payment and subscription history; use soft deletion by default.
+  - Synchronized tables use globally unique IDs and never auto-incremented IDs.
+  - Separate synchronized business tables from device-local tables.
+  - Multi-table operations use Dexie transactions.
+  - Local writes must not wait for the network and UI reads must remain reactive.
+
+  Security:
+  - Never place secrets, machine credentials, or dexie-cloud.key in source or builds.
+  - Frontend environment variables are public configuration only.
+  - n8n machine credentials stay in n8n and use least privilege.
+  - Logs and diagnostics must not expose full business records or personal notes.
+
+  Quality:
+  - Validate external and user-entered data with schemas.
+  - Cover domain calculations, IndexedDB, migrations, offline behavior, PWA,
+    synchronization conflicts, imports, security, and n8n workflows as applicable.
+  - Meet keyboard navigation, visible focus, labeling, contrast, and error-association
+    accessibility requirements.
+
+rules:
+  proposal:
+    - Cite the relevant requirement, business rule, or acceptance criterion identifiers from the source specification.
+    - State explicit non-goals and identify which implementation lot the change belongs to.
+    - Keep each change small enough to implement and verify independently.
+  specs:
+    - Express requirements as testable WHEN/THEN scenarios.
+    - Preserve source identifiers such as RG-*, FUN-*, TECH-*, SEC-*, SC-* and AC-* when applicable.
+    - Cover offline, synchronization, error, and security behavior whenever the capability is affected.
+  design:
+    - Explain local-first data flow and trust boundaries whenever storage or synchronization is affected.
+    - Record schema-versioning and migration impact for every persisted-data change.
+    - Document rejected approaches when they would violate the no-custom-backend constraint.
+  tasks:
+    - Order tasks by foundation, implementation, tests, and verification.
+    - Include explicit automated-test and build-verification tasks.
+    - Keep each checkbox concrete and independently verifiable.
