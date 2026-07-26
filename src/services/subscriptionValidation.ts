@@ -1,4 +1,5 @@
 import {
+  type IntervalUnit,
   type RenewalMode,
   type SubscriptionStatus,
 } from '../data/db'
@@ -27,6 +28,12 @@ export interface SubscriptionFormInput {
   status: SubscriptionStatus
   renewalMode: RenewalMode
   currentPriceMinor?: number
+  billingIntervalUnit?: IntervalUnit
+  billingIntervalCount?: number
+  commitmentIntervalUnit?: IntervalUnit
+  commitmentIntervalCount?: number
+  renewalIntervalUnit?: IntervalUnit
+  renewalIntervalCount?: number
   nextChargeDate?: string
   pauseUntil?: string
   serviceEndDate?: string
@@ -102,6 +109,25 @@ export function validateSubscriptionInput(
     errors.currentPriceMinor = 'Le prix ne peut pas être négatif.'
   }
 
+  validateIntervalPair(
+    input.billingIntervalUnit,
+    input.billingIntervalCount,
+    'billingInterval',
+    errors,
+  )
+  validateIntervalPair(
+    input.commitmentIntervalUnit,
+    input.commitmentIntervalCount,
+    'commitmentInterval',
+    errors,
+  )
+  validateIntervalPair(
+    input.renewalIntervalUnit,
+    input.renewalIntervalCount,
+    'renewalInterval',
+    errors,
+  )
+
   if (input.nextChargeDate && !isValidCivilDate(input.nextChargeDate)) {
     errors.nextChargeDate = 'La date de prochaine échéance est invalide (YYYY-MM-DD).'
   }
@@ -129,5 +155,28 @@ export function validateSubscriptionInput(
   return {
     isValid: Object.keys(errors).length === 0,
     errors,
+  }
+}
+
+function validateIntervalPair(
+  unit: IntervalUnit | undefined,
+  count: number | undefined,
+  fieldPrefix: 'billingInterval' | 'commitmentInterval' | 'renewalInterval',
+  errors: Record<string, string>,
+): void {
+  const hasUnit = Boolean(unit)
+  const hasCount = typeof count === 'number'
+
+  if (!hasUnit && !hasCount) {
+    return
+  }
+
+  if (!hasUnit || !hasCount) {
+    errors[fieldPrefix] = 'L\'unité et la quantité de l\'intervalle doivent être renseignées ensemble.'
+    return
+  }
+
+  if (!Number.isInteger(count) || count < 1) {
+    errors[fieldPrefix] = 'La quantité de l\'intervalle doit être un entier strictement positif.'
   }
 }

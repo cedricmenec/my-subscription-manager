@@ -22,7 +22,23 @@ export type SubscriptionStatus =
 
 export type RenewalMode = 'AUTOMATIC' | 'MANUAL' | 'UNKNOWN'
 
-export type BillingInterval = 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'UNKNOWN'
+export type LegacyBillingInterval = 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'UNKNOWN'
+
+export type IntervalUnit = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'
+
+export interface Money {
+  amountMinor: number
+  currency: string
+}
+
+export type PaymentStatus =
+  | 'PROJECTED'
+  | 'ASSUMED_PAID'
+  | 'CONFIRMED_PAID'
+  | 'SKIPPED'
+  | 'REFUNDED'
+
+export type PaymentSource = 'GENERATED' | 'IMPORTED' | 'MANUAL' | 'N8N'
 
 export interface Category extends SyncedEntity {
   name: string
@@ -38,7 +54,12 @@ export interface Subscription extends SyncedEntity {
   archivedAt?: Date
   currentPriceMinor?: number
   currency?: string
-  billingInterval?: BillingInterval
+  billingIntervalUnit?: IntervalUnit
+  billingIntervalCount?: number
+  commitmentIntervalUnit?: IntervalUnit
+  commitmentIntervalCount?: number
+  renewalIntervalUnit?: IntervalUnit
+  renewalIntervalCount?: number
   renewalMode: RenewalMode
   startDate?: string
   nextChargeDate?: string
@@ -50,11 +71,24 @@ export interface Subscription extends SyncedEntity {
   notes?: string
 }
 
+export interface Payment extends SyncedEntity {
+  subscriptionId: string
+  scheduledDate: string
+  paidDate?: string
+  status: PaymentStatus
+  amount: Money
+  source: PaymentSource
+  externalReference?: string
+  notes?: string
+  correctedAt?: Date
+}
+
 export interface AppSettings extends SyncedEntity {
   key: 'main'
   baseCurrency: string
   timezone: string
   paymentAssumptionEnabled: boolean
+  paymentAssumptionDelayDays: number
 }
 
 export interface LocalSetting {
@@ -86,6 +120,7 @@ function resolveCloudUrl(value?: string): string {
 export class SubscriptionDatabase extends Dexie {
   subscriptions!: DexieCloudTable<Subscription, 'id'>
   categories!: DexieCloudTable<Category, 'id'>
+  payments!: DexieCloudTable<Payment, 'id'>
   settings!: DexieCloudTable<AppSettings, 'id'>
 
   localSettings!: Table<LocalSetting, string>
@@ -109,7 +144,7 @@ export class SubscriptionDatabase extends Dexie {
     this.version(2)
       .stores({
         subscriptions:
-          `${syncedPrimaryKey}, status, categoryId, renewalMode, billingInterval, nextChargeDate, updatedAt, archivedAt, deletedAt`,
+          `${syncedPrimaryKey}, status, categoryId, renewalMode, nextChargeDate, updatedAt, archivedAt, deletedAt`,
         categories: `${syncedPrimaryKey}, &name, sortOrder, updatedAt`,
         settings: `${syncedPrimaryKey}, &key, updatedAt`,
         localSettings: '&key, updatedAt',
@@ -138,6 +173,64 @@ export class SubscriptionDatabase extends Dexie {
           }),
       )
 
+    this.version(3)
+      .stores({
+        subscriptions:
+          `${syncedPrimaryKey}, status, categoryId, renewalMode, billingIntervalUnit, nextChargeDate, updatedAt, archivedAt, deletedAt`,
+        categories: `${syncedPrimaryKey}, &name, sortOrder, updatedAt`,
+        payments:
+          `${syncedPrimaryKey}, subscriptionId, scheduledDate, paidDate, status, [subscriptionId+scheduledDate], updatedAt, deletedAt`,
+        settings: `${syncedPrimaryKey}, &key, updatedAt`,
+        localSettings: '&key, updatedAt',
+        diagnosticLogs: '++id, timestamp, category',
+      })
+      .upgrade(async tx => {
+        await tx
+          .table('subscriptions')
+          .toCollection()
+          .modify((subscription: Partial<Subscription> & { billingInterval?: LegacyBillingInterval }) => {
+            const legacyInterval = subscription.billingInterval
+            const mappedInterval = mapLegacyBillingInterval(legacyInterval)
+
+            if (!subscription.billingIntervalUnit && mappedInterval) {
+              subscription.billingIntervalUnit = mappedInterval.unit
+              subscription.billingIntervalCount = mappedInterval.count
+            }
+
+            if (!subscription.renewalIntervalUnit && mappedInterval) {
+              subscription.renewalIntervalUnit = mappedInterval.unit
+              subscription.renewalIntervalCount = mappedInterval.count
+            }
+
+            if (!subscription.schemaVersion || subscription.schemaVersion < 3) {
+              subscription.schemaVersion = 3
+            }
+
+            if (!subscription.updatedAt) {
+              subscription.updatedAt = new Date()
+            }
+
+            delete subscription.billingInterval
+          })
+
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((settings: Partial<AppSettings>) => {
+            if (typeof settings.paymentAssumptionDelayDays !== 'number') {
+              settings.paymentAssumptionDelayDays = 0
+            }
+
+            if (!settings.schemaVersion || settings.schemaVersion < 3) {
+              settings.schemaVersion = 3
+            }
+
+            if (!settings.updatedAt) {
+              settings.updatedAt = new Date()
+            }
+          })
+      })
+
     if (!options.skipCloud) {
       this.cloud.configure({
         databaseUrl: resolveCloudUrl(options.cloudUrl),
@@ -153,4 +246,19 @@ export const db = new SubscriptionDatabase()
 
 export function getCurrentSyncState(): SyncState {
   return db.cloud.syncState.getValue()
+}
+
+function mapLegacyBillingInterval(
+  interval?: LegacyBillingInterval,
+): { unit: IntervalUnit; count: number } | undefined {
+  switch (interval) {
+    case 'WEEKLY':
+      return { unit: 'WEEK', count: 1 }
+    case 'MONTHLY':
+      return { unit: 'MONTH', count: 1 }
+    case 'YEARLY':
+      return { unit: 'YEAR', count: 1 }
+    default:
+      return undefined
+  }
 }

@@ -1,6 +1,7 @@
 import {
   db,
   type Category,
+  type IntervalUnit,
   type Subscription,
   type SubscriptionDatabase,
 } from '../data/db'
@@ -43,13 +44,16 @@ export interface UpsertSubscriptionInput extends SubscriptionFormInput {
   planName?: string
   categoryId?: string
   currency?: string
-  billingInterval?: Subscription['billingInterval']
+  billingIntervalUnit?: IntervalUnit
+  billingIntervalCount?: number
+  commitmentIntervalUnit?: IntervalUnit
+  commitmentIntervalCount?: number
+  renewalIntervalUnit?: IntervalUnit
+  renewalIntervalCount?: number
   startDate?: string
   cancellationInstructions?: string
   notes?: string
 }
-
-const DEFAULT_BILLING_INTERVAL: Subscription['billingInterval'] = 'UNKNOWN'
 
 function createEntityId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`
@@ -64,6 +68,10 @@ function cleanOptional(value?: string): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined
 }
 
+function normalizePositiveInteger(value?: number): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined
+}
+
 export function computeSubscriptionCompletion(
   subscription: Subscription,
 ): CompletionResult {
@@ -73,7 +81,9 @@ export function computeSubscriptionCompletion(
   if (!subscription.status) missingFields.push('status')
   if (typeof subscription.currentPriceMinor !== 'number') missingFields.push('price')
   if (!subscription.currency) missingFields.push('currency')
-  if (!subscription.billingInterval) missingFields.push('billingInterval')
+  if (!subscription.billingIntervalUnit || !subscription.billingIntervalCount) {
+    missingFields.push('billingInterval')
+  }
   if (!subscription.nextChargeDate) missingFields.push('nextChargeDate')
   if (!subscription.renewalMode) missingFields.push('renewalMode')
 
@@ -114,7 +124,7 @@ export async function createCategory(
     sortOrder: now.getTime(),
     createdAt: now,
     updatedAt: now,
-    schemaVersion: 2,
+    schemaVersion: 3,
   }
 
   await database.categories.put(category)
@@ -130,6 +140,12 @@ export async function createSubscription(
     status: input.status,
     renewalMode: input.renewalMode,
     currentPriceMinor: input.currentPriceMinor,
+    billingIntervalUnit: input.billingIntervalUnit,
+    billingIntervalCount: input.billingIntervalCount,
+    commitmentIntervalUnit: input.commitmentIntervalUnit,
+    commitmentIntervalCount: input.commitmentIntervalCount,
+    renewalIntervalUnit: input.renewalIntervalUnit,
+    renewalIntervalCount: input.renewalIntervalCount,
     nextChargeDate: input.nextChargeDate,
     pauseUntil: input.pauseUntil,
     serviceEndDate: input.serviceEndDate,
@@ -152,7 +168,12 @@ export async function createSubscription(
     renewalMode: input.renewalMode,
     currentPriceMinor: input.currentPriceMinor,
     currency: cleanOptional(input.currency),
-    billingInterval: input.billingInterval ?? DEFAULT_BILLING_INTERVAL,
+    billingIntervalUnit: input.billingIntervalUnit,
+    billingIntervalCount: normalizePositiveInteger(input.billingIntervalCount),
+    commitmentIntervalUnit: input.commitmentIntervalUnit,
+    commitmentIntervalCount: normalizePositiveInteger(input.commitmentIntervalCount),
+    renewalIntervalUnit: input.renewalIntervalUnit,
+    renewalIntervalCount: normalizePositiveInteger(input.renewalIntervalCount),
     startDate: cleanOptional(input.startDate),
     nextChargeDate: cleanOptional(input.nextChargeDate),
     pauseUntil: cleanOptional(input.pauseUntil),
@@ -163,7 +184,7 @@ export async function createSubscription(
     notes: cleanOptional(input.notes),
     createdAt: now,
     updatedAt: now,
-    schemaVersion: 2,
+    schemaVersion: 3,
   }
 
   await database.transaction('rw', database.subscriptions, async () => {
@@ -199,7 +220,15 @@ export async function updateSubscription(
     planName: cleanOptional(patch.planName) ?? current.planName,
     categoryId: cleanOptional(patch.categoryId),
     currency: cleanOptional(patch.currency),
-    billingInterval: patch.billingInterval ?? current.billingInterval,
+    billingIntervalUnit: patch.billingIntervalUnit ?? current.billingIntervalUnit,
+    billingIntervalCount:
+      normalizePositiveInteger(patch.billingIntervalCount) ?? current.billingIntervalCount,
+    commitmentIntervalUnit: patch.commitmentIntervalUnit ?? current.commitmentIntervalUnit,
+    commitmentIntervalCount:
+      normalizePositiveInteger(patch.commitmentIntervalCount) ?? current.commitmentIntervalCount,
+    renewalIntervalUnit: patch.renewalIntervalUnit ?? current.renewalIntervalUnit,
+    renewalIntervalCount:
+      normalizePositiveInteger(patch.renewalIntervalCount) ?? current.renewalIntervalCount,
     startDate: cleanOptional(patch.startDate),
     nextChargeDate: cleanOptional(patch.nextChargeDate),
     pauseUntil: cleanOptional(patch.pauseUntil),
@@ -209,7 +238,7 @@ export async function updateSubscription(
     cancellationInstructions: cleanOptional(patch.cancellationInstructions),
     notes: cleanOptional(patch.notes),
     updatedAt: new Date(),
-    schemaVersion: 2,
+    schemaVersion: 3,
   }
 
   const validation = validateSubscriptionInput({
@@ -217,6 +246,12 @@ export async function updateSubscription(
     status: merged.status,
     renewalMode: merged.renewalMode,
     currentPriceMinor: merged.currentPriceMinor,
+    billingIntervalUnit: merged.billingIntervalUnit,
+    billingIntervalCount: merged.billingIntervalCount,
+    commitmentIntervalUnit: merged.commitmentIntervalUnit,
+    commitmentIntervalCount: merged.commitmentIntervalCount,
+    renewalIntervalUnit: merged.renewalIntervalUnit,
+    renewalIntervalCount: merged.renewalIntervalCount,
     nextChargeDate: merged.nextChargeDate,
     pauseUntil: merged.pauseUntil,
     serviceEndDate: merged.serviceEndDate,
@@ -236,7 +271,12 @@ export async function updateSubscription(
       planName: merged.planName,
       categoryId: merged.categoryId,
       currency: merged.currency,
-      billingInterval: merged.billingInterval,
+      billingIntervalUnit: merged.billingIntervalUnit,
+      billingIntervalCount: merged.billingIntervalCount,
+      commitmentIntervalUnit: merged.commitmentIntervalUnit,
+      commitmentIntervalCount: merged.commitmentIntervalCount,
+      renewalIntervalUnit: merged.renewalIntervalUnit,
+      renewalIntervalCount: merged.renewalIntervalCount,
       startDate: merged.startDate,
       nextChargeDate: merged.nextChargeDate,
       pauseUntil: merged.pauseUntil,
@@ -249,7 +289,7 @@ export async function updateSubscription(
       renewalMode: merged.renewalMode,
       currentPriceMinor: merged.currentPriceMinor,
       updatedAt: merged.updatedAt,
-      schemaVersion: 2,
+      schemaVersion: 3,
     })
   })
 
@@ -263,7 +303,7 @@ export async function archiveSubscription(
   await database.subscriptions.update(id, {
     archivedAt: new Date(),
     updatedAt: new Date(),
-    schemaVersion: 2,
+    schemaVersion: 3,
   })
 }
 

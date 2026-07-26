@@ -156,6 +156,30 @@ h1 {
   margin-bottom: 20px;
 }
 
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  border: 1px solid #d9dfdd;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.summary-card h2 {
+  margin: 6px 0 10px;
+  color: #17211f;
+  font-size: 1.4rem;
+}
+
+.summary-card p:last-child {
+  margin-bottom: 0;
+}
+
 .control-card {
   border: 1px solid #d9dfdd;
   border-radius: 8px;
@@ -269,6 +293,62 @@ h1 {
 
 .subscription-item p {
   margin: 0 0 6px;
+}
+
+.payment-list {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.payment-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px dashed #d9dfdd;
+  padding: 12px 0;
+}
+
+.payment-item h3 {
+  margin: 0 0 4px;
+}
+
+.payment-item p {
+  margin: 0 0 6px;
+}
+
+.payment-status {
+  display: inline-flex;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.payment-status-projected {
+  background: #edf4f2;
+  color: #20534c;
+}
+
+.payment-status-assumed_paid {
+  background: #fff4db;
+  color: #8a5d00;
+}
+
+.payment-status-confirmed_paid {
+  background: #e4f6ea;
+  color: #27633d;
+}
+
+.payment-status-skipped {
+  background: #f2f2f2;
+  color: #555;
+}
+
+.payment-status-refunded {
+  background: #fde7e4;
+  color: #9a3f32;
 }
 
 .category-row {
@@ -427,6 +507,7 @@ textarea:focus-visible {
   }
 
   .controls-grid,
+  .summary-grid,
   .diagnostics dl {
     grid-template-columns: 1fr;
   }
@@ -438,6 +519,10 @@ textarea:focus-visible {
   }
 
   .subscription-item {
+    flex-direction: column;
+  }
+
+  .payment-item {
     flex-direction: column;
   }
 

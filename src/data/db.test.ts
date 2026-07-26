@@ -14,7 +14,7 @@ afterEach(async () => {
 })
 
 describe('SubscriptionDatabase', () => {
-  it('configure le schéma v2 avec categories et requireAuth', () => {
+  it('configure le schéma v3 avec payments et requireAuth', () => {
     const dbName = `test-db-${crypto.randomUUID()}`
     createdDbNames.push(dbName)
 
@@ -23,11 +23,12 @@ describe('SubscriptionDatabase', () => {
       cloudUrl: 'https://invalid.dexie.cloud',
     })
 
-    expect(testDb.verno).toBe(2)
+    expect(testDb.verno).toBe(3)
     expect(testDb.tables.map(table => table.name)).toEqual(
       expect.arrayContaining([
         'subscriptions',
         'categories',
+        'payments',
         'settings',
         'localSettings',
         'diagnosticLogs',
@@ -45,7 +46,7 @@ describe('SubscriptionDatabase', () => {
     testDb.close()
   })
 
-  it('migre les abonnements v1 en v2 avec renewalMode et schemaVersion', async () => {
+  it('migre les abonnements legacy en v3 avec renewalMode et intervalles structurés', async () => {
     const dbName = `migration-db-${crypto.randomUUID()}`
     createdDbNames.push(dbName)
 
@@ -66,6 +67,7 @@ describe('SubscriptionDatabase', () => {
     await legacyDb.table('subscriptions').put({
       id: 'sbs-legacy-1',
       name: 'Legacy',
+      billingInterval: 'MONTHLY',
       createdAt: new Date(),
       updatedAt: new Date(),
       schemaVersion: 1,
@@ -78,7 +80,11 @@ describe('SubscriptionDatabase', () => {
     const migrated = await upgradedDb.subscriptions.get('sbs-legacy-1')
     expect(migrated?.renewalMode).toBe('UNKNOWN')
     expect(migrated?.status).toBe('UNKNOWN')
-    expect(migrated?.schemaVersion).toBe(2)
+    expect(migrated?.billingIntervalUnit).toBe('MONTH')
+    expect(migrated?.billingIntervalCount).toBe(1)
+    expect(migrated?.renewalIntervalUnit).toBe('MONTH')
+    expect(migrated?.renewalIntervalCount).toBe(1)
+    expect(migrated?.schemaVersion).toBe(3)
 
     upgradedDb.close()
   })

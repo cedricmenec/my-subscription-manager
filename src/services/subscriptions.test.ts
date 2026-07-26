@@ -33,7 +33,8 @@ describe('subscriptions service', () => {
       renewalMode: 'AUTOMATIC',
       currentPriceMinor: 1200,
       currency: 'EUR',
-      billingInterval: 'MONTHLY',
+      billingIntervalUnit: 'MONTH',
+      billingIntervalCount: 1,
       nextChargeDate: '2026-08-01',
     }, testDb)
 
@@ -63,7 +64,7 @@ describe('subscriptions service', () => {
       renewalMode: 'AUTOMATIC',
       createdAt: new Date(),
       updatedAt: new Date(),
-      schemaVersion: 2,
+      schemaVersion: 3,
     })
 
     expect(completion.isComplete).toBe(false)
