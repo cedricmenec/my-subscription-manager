@@ -341,6 +341,11 @@ function App() {
         setSubscriptions(loadedSubscriptions)
         setCategories(loadedCategories.map(category => ({ id: category.id, name: category.name })))
 
+        const settings = await db.settings.where('key').equals('main').first()
+        if (settings?.exchangeRates) {
+          setExchangeRates(settings.exchangeRates)
+        }
+
         try {
           await materializeProjectedPayments()
         } catch (error) {
@@ -355,11 +360,6 @@ function App() {
 
         setPayments(loadedPayments)
         setSummary(loadedSummary)
-
-        const settings = await db.settings.where('key').equals('main').first()
-        if (settings?.exchangeRates) {
-          setExchangeRates(settings.exchangeRates)
-        }
       } catch (error) {
         console.error('loadContextData failed', error)
         setFeedback(
@@ -514,10 +514,10 @@ function App() {
     try {
       const settings = await db.settings.where('key').equals('main').first()
       if (settings) {
-        await db.settings.update(settings.id, {
+        await db.settings.put({
+          ...settings,
           exchangeRates: updatedRates,
           updatedAt: new Date(),
-          schemaVersion: 3,
         })
       } else {
         const now = new Date()
@@ -552,10 +552,10 @@ function App() {
     try {
       const settings = await db.settings.where('key').equals('main').first()
       if (settings) {
-        await db.settings.update(settings.id, {
+        await db.settings.put({
+          ...settings,
           exchangeRates: updatedRates,
           updatedAt: new Date(),
-          schemaVersion: 3,
         })
       }
       setOperationStatus('enregistre-localement')

@@ -81,11 +81,11 @@ export async function materializeProjectedPayments(
             existingKeys.add(key)
             createdPayments.push(payment)
           } catch (error) {
-            console.error('Payment materialization put failed', {
-              subscriptionId: subscription.id,
-              scheduledDate: candidate.scheduledDate,
-              error,
-            })
+            const errorMsg = error instanceof Error ? error.message : String(error)
+            console.error(
+              `Payment materialization put failed for ${subscription.id} on ${candidate.scheduledDate}:`,
+              errorMsg,
+            )
           }
         }
       }
