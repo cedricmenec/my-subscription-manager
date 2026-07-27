@@ -522,7 +522,7 @@ function App() {
       } else {
         const now = new Date()
         await db.settings.put({
-          id: `settings-${crypto.randomUUID()}`,
+          id: `stt-${crypto.randomUUID()}`,
           key: 'main',
           baseCurrency: 'EUR',
           timezone: 'Europe/Paris',

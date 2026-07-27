@@ -65,7 +65,7 @@ export async function materializeProjectedPayments(
           }
 
           const payment: Payment = {
-            id: createEntityId('pmt'),
+            id: createEntityId('pym'),
             subscriptionId: candidate.subscriptionId,
             scheduledDate: candidate.scheduledDate,
             status: candidate.status,
