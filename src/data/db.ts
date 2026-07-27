@@ -28,6 +28,7 @@ export type IntervalUnit = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'
 
 export interface Money {
   amountMinor: number
+  amount: number
   currency: string
 }
 
@@ -53,6 +54,7 @@ export interface Subscription extends SyncedEntity {
   status: SubscriptionStatus
   archivedAt?: Date
   currentPriceMinor?: number
+  currentPrice?: number
   currency?: string
   billingIntervalUnit?: IntervalUnit
   billingIntervalCount?: number
@@ -224,6 +226,66 @@ export class SubscriptionDatabase extends Dexie {
 
             if (!settings.schemaVersion || settings.schemaVersion < 3) {
               settings.schemaVersion = 3
+            }
+
+            if (!settings.updatedAt) {
+              settings.updatedAt = new Date()
+            }
+          })
+      })
+
+    this.version(4)
+      .stores({
+        subscriptions:
+          `${syncedPrimaryKey}, status, categoryId, renewalMode, billingIntervalUnit, nextChargeDate, updatedAt, archivedAt, deletedAt`,
+        categories: `${syncedPrimaryKey}, &name, sortOrder, updatedAt`,
+        payments:
+          `${syncedPrimaryKey}, subscriptionId, scheduledDate, paidDate, status, [subscriptionId+scheduledDate], updatedAt, deletedAt`,
+        settings: `${syncedPrimaryKey}, &key, updatedAt`,
+        localSettings: '&key, updatedAt',
+        diagnosticLogs: '++id, timestamp, category',
+      })
+      .upgrade(async tx => {
+        await tx
+          .table('subscriptions')
+          .toCollection()
+          .modify((subscription: Partial<Subscription>) => {
+            if (typeof subscription.currentPriceMinor === 'number') {
+              subscription.currentPrice = subscription.currentPriceMinor / 100
+            }
+
+            if (!subscription.schemaVersion || subscription.schemaVersion < 4) {
+              subscription.schemaVersion = 4
+            }
+
+            if (!subscription.updatedAt) {
+              subscription.updatedAt = new Date()
+            }
+          })
+
+        await tx
+          .table('payments')
+          .toCollection()
+          .modify((payment: Partial<Payment>) => {
+            if (payment.amount && typeof payment.amount.amountMinor === 'number') {
+              payment.amount.amount = payment.amount.amountMinor / 100
+            }
+
+            if (!payment.schemaVersion || payment.schemaVersion < 4) {
+              payment.schemaVersion = 4
+            }
+
+            if (!payment.updatedAt) {
+              payment.updatedAt = new Date()
+            }
+          })
+
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((settings: Partial<AppSettings>) => {
+            if (!settings.schemaVersion || settings.schemaVersion < 4) {
+              settings.schemaVersion = 4
             }
 
             if (!settings.updatedAt) {

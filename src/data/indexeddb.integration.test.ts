@@ -35,7 +35,7 @@ describe('IndexedDB integration', () => {
         name: 'Youtube Premium',
         status: 'ACTIVE',
         renewalMode: 'AUTOMATIC',
-        currentPriceMinor: 1299,
+        currentPrice: 12.99,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH',
         billingIntervalCount: 1,

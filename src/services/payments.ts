@@ -73,7 +73,7 @@ export async function materializeProjectedPayments(
             source: 'GENERATED',
             createdAt: now,
             updatedAt: now,
-            schemaVersion: 3,
+            schemaVersion: 4,
           }
 
           try {
@@ -140,7 +140,7 @@ export async function updatePaymentStatus(
     notes: input.notes ?? current.notes,
     correctedAt: new Date(),
     updatedAt: new Date(),
-    schemaVersion: 3,
+    schemaVersion: 4,
   }
 
   await database.payments.update(id, {

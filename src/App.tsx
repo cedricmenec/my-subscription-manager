@@ -48,11 +48,21 @@ type OperationStatus =
 
 interface FinancialSummaryState {
   baseCurrency: string
+  /** @deprecated Utiliser monthlyEquivalent */
   monthlyEquivalentMinor: number
+  monthlyEquivalent: number
+  /** @deprecated Utiliser annualEquivalent */
   annualEquivalentMinor: number
+  annualEquivalent: number
+  /** @deprecated Utiliser projected30 */
   projected30Minor: number
+  projected30: number
+  /** @deprecated Utiliser projected90 */
   projected90Minor: number
+  projected90: number
+  /** @deprecated Utiliser expensesYearToDate */
   expensesYearToDateMinor: number
+  expensesYearToDate: number
   includedSubscriptionCount: number
   excludedCurrencySubscriptionCount: number
   excludedSubscriptions: Array<{ id: string; reason: string }>
@@ -65,7 +75,7 @@ interface SubscriptionFormState {
   categoryId: string
   status: SubscriptionStatus
   renewalMode: RenewalMode
-  currentPriceMinor: string
+  currentPrice: string
   currency: string
   billingIntervalCount: string
   billingIntervalUnit: IntervalUnit | ''
@@ -127,10 +137,15 @@ const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
 const EMPTY_SUMMARY: FinancialSummaryState = {
   baseCurrency: 'EUR',
   monthlyEquivalentMinor: 0,
+  monthlyEquivalent: 0,
   annualEquivalentMinor: 0,
+  annualEquivalent: 0,
   projected30Minor: 0,
+  projected30: 0,
   projected90Minor: 0,
+  projected90: 0,
   expensesYearToDateMinor: 0,
+  expensesYearToDate: 0,
   includedSubscriptionCount: 0,
   excludedCurrencySubscriptionCount: 0,
   excludedSubscriptions: [],
@@ -143,7 +158,7 @@ const EMPTY_FORM: SubscriptionFormState = {
   categoryId: '',
   status: 'UNKNOWN',
   renewalMode: 'UNKNOWN',
-  currentPriceMinor: '',
+  currentPrice: '',
   currency: 'EUR',
   billingIntervalCount: '1',
   billingIntervalUnit: 'MONTH',
@@ -199,23 +214,23 @@ function resolveOperationStatus(
   return operationStatus
 }
 
-function parseOptionalInteger(value: string): number | undefined {
+function parseOptionalNumber(value: string): number | undefined {
   if (!value.trim()) {
     return undefined
   }
 
   const numericValue = Number(value)
-  return Number.isInteger(numericValue) ? numericValue : undefined
+  return Number.isFinite(numericValue) ? numericValue : undefined
 }
 
-function formatMoneyMinor(amountMinor: number, currency: string): string {
+function formatMoney(amount: number, currency: string): string {
   try {
     return new Intl.NumberFormat('fr-FR', {
       style: 'currency',
       currency,
-    }).format(amountMinor / 100)
+    }).format(amount)
   } catch {
-    return `${(amountMinor / 100).toFixed(2)} ${currency}`
+    return `${amount.toFixed(2)} ${currency}`
   }
 }
 
@@ -229,6 +244,12 @@ function formatInterval(count?: number, unit?: IntervalUnit): string {
 }
 
 function toFormState(subscription: Subscription): SubscriptionFormState {
+  const price = typeof subscription.currentPrice === 'number'
+    ? String(subscription.currentPrice)
+    : typeof subscription.currentPriceMinor === 'number'
+      ? String(subscription.currentPriceMinor / 100)
+      : ''
+
   return {
     name: subscription.name,
     provider: subscription.provider ?? '',
@@ -236,10 +257,7 @@ function toFormState(subscription: Subscription): SubscriptionFormState {
     categoryId: subscription.categoryId ?? '',
     status: subscription.status,
     renewalMode: subscription.renewalMode,
-    currentPriceMinor:
-      typeof subscription.currentPriceMinor === 'number'
-        ? String(subscription.currentPriceMinor)
-        : '',
+    currentPrice: price,
     currency: subscription.currency ?? 'EUR',
     billingIntervalCount: subscription.billingIntervalCount
       ? String(subscription.billingIntervalCount)
@@ -579,13 +597,13 @@ function App() {
         categoryId: formState.categoryId,
         status: formState.status,
         renewalMode: formState.renewalMode,
-        currentPriceMinor: parseOptionalInteger(formState.currentPriceMinor),
+        currentPrice: parseOptionalNumber(formState.currentPrice),
         currency: formState.currency,
-        billingIntervalCount: parseOptionalInteger(formState.billingIntervalCount),
+        billingIntervalCount: parseOptionalNumber(formState.billingIntervalCount),
         billingIntervalUnit: formState.billingIntervalUnit || undefined,
-        commitmentIntervalCount: parseOptionalInteger(formState.commitmentIntervalCount),
+        commitmentIntervalCount: parseOptionalNumber(formState.commitmentIntervalCount),
         commitmentIntervalUnit: formState.commitmentIntervalUnit || undefined,
-        renewalIntervalCount: parseOptionalInteger(formState.renewalIntervalCount),
+        renewalIntervalCount: parseOptionalNumber(formState.renewalIntervalCount),
         renewalIntervalUnit: formState.renewalIntervalUnit || undefined,
         nextChargeDate: formState.nextChargeDate,
         pauseUntil: formState.pauseUntil,
@@ -750,13 +768,13 @@ function App() {
           <article className="summary-card">
             <p className="status-title">Coût mensuel équivalent</p>
             <h2 id="financial-summary-title">
-              {formatMoneyMinor(summary.monthlyEquivalentMinor, summary.baseCurrency)}
+              {formatMoney(summary.monthlyEquivalent, summary.baseCurrency)}
             </h2>
             <p>{summary.includedSubscriptionCount} abonnement(s) inclus</p>
           </article>
           <article className="summary-card">
             <p className="status-title">Coût annuel équivalent</p>
-            <h2>{formatMoneyMinor(summary.annualEquivalentMinor, summary.baseCurrency)}</h2>
+            <h2>{formatMoney(summary.annualEquivalent, summary.baseCurrency)}</h2>
             <p>
               Base consolidée: {summary.baseCurrency}
               {summary.excludedCurrencySubscriptionCount > 0
@@ -769,14 +787,14 @@ function App() {
           </article>
           <article className="summary-card">
             <p className="status-title">Décaissements à 30 jours</p>
-            <h2>{formatMoneyMinor(summary.projected30Minor, summary.baseCurrency)}</h2>
+            <h2>{formatMoney(summary.projected30, summary.baseCurrency)}</h2>
             <p>Projection locale</p>
           </article>
           <article className="summary-card">
             <p className="status-title">Décaissements à 90 jours</p>
-            <h2>{formatMoneyMinor(summary.projected90Minor, summary.baseCurrency)}</h2>
+            <h2>{formatMoney(summary.projected90, summary.baseCurrency)}</h2>
             <p>
-              Dépenses YTD: {formatMoneyMinor(summary.expensesYearToDateMinor, summary.baseCurrency)}
+              Dépenses YTD: {formatMoney(summary.expensesYearToDate, summary.baseCurrency)}
             </p>
           </article>
         </section>
@@ -938,9 +956,13 @@ function App() {
                         Prochaine échéance: {subscription.nextChargeDate ?? 'Non renseignée'} |
                         {' '}Complétude: {completion.score}%
                       </p>
-                      {typeof subscription.currentPriceMinor === 'number' && subscription.currency ? (
+                      {typeof subscription.currentPrice === 'number' && subscription.currency ? (
                         <p>
-                          Tarif courant: {formatMoneyMinor(subscription.currentPriceMinor, subscription.currency)}
+                          Tarif courant: {formatMoney(subscription.currentPrice, subscription.currency)}
+                        </p>
+                      ) : typeof subscription.currentPriceMinor === 'number' && subscription.currency ? (
+                        <p>
+                          Tarif courant: {formatMoney(subscription.currentPriceMinor / 100, subscription.currency)}
                         </p>
                       ) : null}
                       {subscription.notes ? <p>Notes: {subscription.notes}</p> : null}
@@ -979,7 +1001,7 @@ function App() {
                       {PAYMENT_STATUS_LABELS[payment.status]}
                     </p>
                     <h3>{payment.scheduledDate}</h3>
-                    <p>{formatMoneyMinor(payment.amount.amountMinor, payment.amount.currency)}</p>
+                    <p>{formatMoney(payment.amount.amount ?? payment.amount.amountMinor / 100, payment.amount.currency)}</p>
                     <p>Abonnement: {payment.subscriptionId}</p>
                   </div>
                   <div className="button-row">
@@ -1042,9 +1064,9 @@ function App() {
                 <input value={formState.planName} onChange={event => updateFormField('planName', event.target.value)} />
               </label>
               <label>
-                Prix (centimes)
-                <input value={formState.currentPriceMinor} onChange={event => updateFormField('currentPriceMinor', event.target.value)} />
-                {formErrors.currentPriceMinor ? <span className="field-error">{formErrors.currentPriceMinor}</span> : null}
+                Prix
+                <input value={formState.currentPrice} onChange={event => updateFormField('currentPrice', event.target.value)} />
+                {formErrors.currentPrice ? <span className="field-error">{formErrors.currentPrice}</span> : null}
               </label>
               <label>
                 Devise

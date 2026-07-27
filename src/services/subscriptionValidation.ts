@@ -28,6 +28,7 @@ export interface SubscriptionFormInput {
   status: SubscriptionStatus
   renewalMode: RenewalMode
   currentPriceMinor?: number
+  currentPrice?: number
   billingIntervalUnit?: IntervalUnit
   billingIntervalCount?: number
   commitmentIntervalUnit?: IntervalUnit

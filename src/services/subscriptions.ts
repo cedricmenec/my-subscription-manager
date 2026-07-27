@@ -79,7 +79,7 @@ export function computeSubscriptionCompletion(
 
   if (!subscription.name.trim()) missingFields.push('name')
   if (!subscription.status) missingFields.push('status')
-  if (typeof subscription.currentPriceMinor !== 'number') missingFields.push('price')
+  if (typeof subscription.currentPrice !== 'number' && typeof subscription.currentPriceMinor !== 'number') missingFields.push('price')
   if (!subscription.currency) missingFields.push('currency')
   if (!subscription.billingIntervalUnit || !subscription.billingIntervalCount) {
     missingFields.push('billingInterval')
@@ -124,7 +124,7 @@ export async function createCategory(
     sortOrder: now.getTime(),
     createdAt: now,
     updatedAt: now,
-    schemaVersion: 3,
+    schemaVersion: 4,
   }
 
   await database.categories.put(category)
@@ -140,6 +140,7 @@ export async function createSubscription(
     status: input.status,
     renewalMode: input.renewalMode,
     currentPriceMinor: input.currentPriceMinor,
+    currentPrice: input.currentPrice,
     billingIntervalUnit: input.billingIntervalUnit,
     billingIntervalCount: input.billingIntervalCount,
     commitmentIntervalUnit: input.commitmentIntervalUnit,
@@ -158,6 +159,11 @@ export async function createSubscription(
   }
 
   const now = new Date()
+  const currentPrice = input.currentPrice
+  const currentPriceMinor = typeof currentPrice === 'number'
+    ? Math.round(currentPrice * 100)
+    : input.currentPriceMinor
+
   const subscription: Subscription = {
     id: createEntityId('sbs'),
     name: input.name.trim(),
@@ -166,7 +172,8 @@ export async function createSubscription(
     categoryId: cleanOptional(input.categoryId),
     status: input.status,
     renewalMode: input.renewalMode,
-    currentPriceMinor: input.currentPriceMinor,
+    currentPriceMinor,
+    currentPrice: typeof currentPrice === 'number' ? currentPrice : undefined,
     currency: cleanOptional(input.currency),
     billingIntervalUnit: input.billingIntervalUnit,
     billingIntervalCount: normalizePositiveInteger(input.billingIntervalCount),
@@ -184,7 +191,7 @@ export async function createSubscription(
     notes: cleanOptional(input.notes),
     createdAt: now,
     updatedAt: now,
-    schemaVersion: 3,
+    schemaVersion: 4,
   }
 
   await database.transaction('rw', database.subscriptions, async () => {
@@ -220,6 +227,12 @@ export async function updateSubscription(
     planName: cleanOptional(patch.planName) ?? current.planName,
     categoryId: cleanOptional(patch.categoryId),
     currency: cleanOptional(patch.currency),
+    currentPriceMinor: typeof patch.currentPrice === 'number'
+      ? Math.round(patch.currentPrice * 100)
+      : (patch.currentPriceMinor ?? current.currentPriceMinor),
+    currentPrice: typeof patch.currentPrice === 'number'
+      ? patch.currentPrice
+      : (patch.currentPriceMinor !== undefined ? patch.currentPriceMinor / 100 : current.currentPrice),
     billingIntervalUnit: patch.billingIntervalUnit ?? current.billingIntervalUnit,
     billingIntervalCount:
       normalizePositiveInteger(patch.billingIntervalCount) ?? current.billingIntervalCount,
@@ -238,7 +251,7 @@ export async function updateSubscription(
     cancellationInstructions: cleanOptional(patch.cancellationInstructions),
     notes: cleanOptional(patch.notes),
     updatedAt: new Date(),
-    schemaVersion: 3,
+    schemaVersion: 4,
   }
 
   const validation = validateSubscriptionInput({
@@ -246,6 +259,7 @@ export async function updateSubscription(
     status: merged.status,
     renewalMode: merged.renewalMode,
     currentPriceMinor: merged.currentPriceMinor,
+    currentPrice: merged.currentPrice,
     billingIntervalUnit: merged.billingIntervalUnit,
     billingIntervalCount: merged.billingIntervalCount,
     commitmentIntervalUnit: merged.commitmentIntervalUnit,
@@ -288,8 +302,9 @@ export async function updateSubscription(
       status: merged.status,
       renewalMode: merged.renewalMode,
       currentPriceMinor: merged.currentPriceMinor,
+      currentPrice: merged.currentPrice,
       updatedAt: merged.updatedAt,
-      schemaVersion: 3,
+      schemaVersion: 4,
     })
   })
 
@@ -303,7 +318,7 @@ export async function archiveSubscription(
   await database.subscriptions.update(id, {
     archivedAt: new Date(),
     updatedAt: new Date(),
-    schemaVersion: 3,
+    schemaVersion: 4,
   })
 }
 

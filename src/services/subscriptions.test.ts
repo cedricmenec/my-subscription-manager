@@ -31,7 +31,7 @@ describe('subscriptions service', () => {
       name: 'Notion',
       status: 'ACTIVE',
       renewalMode: 'AUTOMATIC',
-      currentPriceMinor: 1200,
+      currentPrice: 12.00,
       currency: 'EUR',
       billingIntervalUnit: 'MONTH',
       billingIntervalCount: 1,

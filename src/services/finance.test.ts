@@ -21,6 +21,7 @@ describe('finance helpers', () => {
       status: 'ACTIVE' as const,
       renewalMode: 'AUTOMATIC' as const,
       currentPriceMinor: 12000,
+      currentPrice: 120.00,
       currency: 'EUR',
       billingIntervalUnit: 'YEAR' as const,
       billingIntervalCount: 1,
@@ -29,8 +30,8 @@ describe('finance helpers', () => {
       schemaVersion: 3,
     }
 
-    expect(computeEquivalentMonthlyCost(subscription)).toBe(1000)
-    expect(computeEquivalentAnnualCost(subscription)).toBe(12000)
+    expect(computeEquivalentMonthlyCost(subscription)).toBe(10)
+    expect(computeEquivalentAnnualCost(subscription)).toBe(120)
   })
 
   it('projette les paiements futurs en respectant pause et fin de service', () => {
@@ -40,6 +41,7 @@ describe('finance helpers', () => {
       status: 'PAUSED' as const,
       renewalMode: 'AUTOMATIC' as const,
       currentPriceMinor: 1500,
+      currentPrice: 15.00,
       currency: 'EUR',
       billingIntervalUnit: 'MONTH' as const,
       billingIntervalCount: 1,
@@ -64,6 +66,7 @@ describe('finance helpers', () => {
         status: 'ACTIVE' as const,
         renewalMode: 'AUTOMATIC' as const,
         currentPriceMinor: 1000,
+        currentPrice: 10.00,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH' as const,
         billingIntervalCount: 1,
@@ -79,7 +82,7 @@ describe('finance helpers', () => {
         subscriptionId: 'sbs-3',
         scheduledDate: '2026-07-30',
         status: 'PROJECTED' as const,
-        amount: { amountMinor: 1000, currency: 'EUR' },
+        amount: { amountMinor: 1000, amount: 10.00, currency: 'EUR' },
         source: 'GENERATED' as const,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -91,7 +94,7 @@ describe('finance helpers', () => {
         scheduledDate: '2026-07-01',
         paidDate: '2026-07-01',
         status: 'CONFIRMED_PAID' as const,
-        amount: { amountMinor: 1000, currency: 'EUR' },
+        amount: { amountMinor: 1000, amount: 10.00, currency: 'EUR' },
         source: 'MANUAL' as const,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -106,11 +109,11 @@ describe('finance helpers', () => {
       referenceDate: '2026-07-26',
     })
 
-    expect(summary.monthlyEquivalentMinor).toBe(1000)
-    expect(summary.annualEquivalentMinor).toBe(12000)
-    expect(summary.projected30Minor).toBe(1000)
-    expect(summary.projected90Minor).toBe(1000)
-    expect(summary.expensesYearToDateMinor).toBe(1000)
+    expect(summary.monthlyEquivalent).toBe(10)
+    expect(summary.annualEquivalent).toBe(120)
+    expect(summary.projected30).toBe(10)
+    expect(summary.projected90).toBe(10)
+    expect(summary.expensesYearToDate).toBe(10)
   })
 })
 
@@ -153,6 +156,7 @@ describe('taux de conversion', () => {
         status: 'ACTIVE' as const,
         renewalMode: 'AUTOMATIC' as const,
         currentPriceMinor: 1000,
+        currentPrice: 10.00,
         currency: 'USD',
         billingIntervalUnit: 'MONTH' as const,
         billingIntervalCount: 1,
@@ -170,8 +174,8 @@ describe('taux de conversion', () => {
       referenceDate: '2026-07-26',
     })
 
-    expect(summary.monthlyEquivalentMinor).toBe(920)
-    expect(summary.annualEquivalentMinor).toBe(11040)
+    expect(summary.monthlyEquivalent).toBe(9.20)
+    expect(summary.annualEquivalent).toBe(110.40)
     expect(summary.includedSubscriptionCount).toBe(1)
     expect(summary.excludedCurrencySubscriptionCount).toBe(0)
     expect(summary.excludedSubscriptions).toHaveLength(0)
@@ -185,6 +189,7 @@ describe('taux de conversion', () => {
         status: 'ACTIVE' as const,
         renewalMode: 'AUTOMATIC' as const,
         currentPriceMinor: 1000,
+        currentPrice: 10.00,
         currency: 'USD',
         billingIntervalUnit: 'MONTH' as const,
         billingIntervalCount: 1,
@@ -201,7 +206,7 @@ describe('taux de conversion', () => {
       referenceDate: '2026-07-26',
     })
 
-    expect(summary.monthlyEquivalentMinor).toBe(0)
+    expect(summary.monthlyEquivalent).toBe(0)
     expect(summary.includedSubscriptionCount).toBe(0)
     expect(summary.excludedCurrencySubscriptionCount).toBe(1)
     expect(summary.excludedSubscriptions).toHaveLength(1)
@@ -217,6 +222,7 @@ describe('taux de conversion', () => {
         status: 'ACTIVE' as const,
         renewalMode: 'AUTOMATIC' as const,
         currentPriceMinor: 1000,
+        currentPrice: 10.00,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH' as const,
         billingIntervalCount: 1,
@@ -230,6 +236,7 @@ describe('taux de conversion', () => {
         status: 'ACTIVE' as const,
         renewalMode: 'AUTOMATIC' as const,
         currentPriceMinor: 2000,
+        currentPrice: 20.00,
         currency: 'USD',
         billingIntervalUnit: 'MONTH' as const,
         billingIntervalCount: 1,
@@ -247,8 +254,8 @@ describe('taux de conversion', () => {
       referenceDate: '2026-07-26',
     })
 
-    // EUR: 1000 + USD: 2000 * 0.92 = 1840 = 2840
-    expect(summary.monthlyEquivalentMinor).toBe(2840)
+    // EUR: 10.00 + USD: 20.00 * 0.92 = 18.40 = 28.40
+    expect(summary.monthlyEquivalent).toBe(28.40)
     expect(summary.includedSubscriptionCount).toBe(2)
     expect(summary.excludedCurrencySubscriptionCount).toBe(0)
   })
@@ -261,6 +268,7 @@ describe('taux de conversion', () => {
         status: 'ACTIVE' as const,
         renewalMode: 'AUTOMATIC' as const,
         currentPriceMinor: 1500,
+        currentPrice: 15.00,
         currency: 'USD',
         billingIntervalUnit: 'MONTH' as const,
         billingIntervalCount: 1,
@@ -277,7 +285,7 @@ describe('taux de conversion', () => {
         subscriptionId: 'sbs-usd',
         scheduledDate: '2026-08-15',
         status: 'PROJECTED' as const,
-        amount: { amountMinor: 1500, currency: 'USD' },
+        amount: { amountMinor: 1500, amount: 15.00, currency: 'USD' },
         source: 'GENERATED' as const,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -293,10 +301,10 @@ describe('taux de conversion', () => {
       referenceDate: '2026-07-26',
     })
 
-    // 1500 USD * 0.92 = 1380 EUR
-    expect(summary.projected30Minor).toBe(1380)
-    expect(summary.projected90Minor).toBe(1380)
-    expect(summary.monthlyEquivalentMinor).toBe(1380)
+    // 15.00 USD * 0.92 = 13.80 EUR
+    expect(summary.projected30).toBe(13.80)
+    expect(summary.projected90).toBe(13.80)
+    expect(summary.monthlyEquivalent).toBe(13.80)
   })
 
   it('ignore les paiements USD sans taux de conversion dans les décaissements', () => {
@@ -306,7 +314,7 @@ describe('taux de conversion', () => {
         subscriptionId: 'sbs-usd',
         scheduledDate: '2026-08-15',
         status: 'PROJECTED' as const,
-        amount: { amountMinor: 1500, currency: 'USD' },
+        amount: { amountMinor: 1500, amount: 15.00, currency: 'USD' },
         source: 'GENERATED' as const,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -321,7 +329,7 @@ describe('taux de conversion', () => {
       referenceDate: '2026-07-26',
     })
 
-    expect(summary.projected30Minor).toBe(0)
-    expect(summary.projected90Minor).toBe(0)
+    expect(summary.projected30).toBe(0)
+    expect(summary.projected90).toBe(0)
   })
 })

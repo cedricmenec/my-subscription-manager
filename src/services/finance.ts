@@ -13,12 +13,33 @@ import {
 } from './civilDate'
 import { isValidCivilDate } from './subscriptionValidation'
 
+/**
+ * Résout le prix en unités de devise depuis currentPrice (prioritaire)
+ * ou currentPriceMinor / 100 (fallback legacy).
+ */
+export function resolvePrice(subscription: Subscription): number | undefined {
+  if (typeof subscription.currentPrice === 'number') return subscription.currentPrice
+  if (typeof subscription.currentPriceMinor === 'number') return subscription.currentPriceMinor / 100
+  return undefined
+}
+
+/**
+ * Résout le montant en unités de devise depuis amount (prioritaire)
+ * ou amountMinor / 100 (fallback legacy).
+ */
+export function resolveAmount(money: { amount?: number; amountMinor?: number }): number | undefined {
+  if (typeof money.amount === 'number') return money.amount
+  if (typeof money.amountMinor === 'number') return money.amountMinor / 100
+  return undefined
+}
+
 export interface ProjectedPaymentDraft {
   subscriptionId: string
   scheduledDate: string
   status: PaymentStatus
   amount: {
     amountMinor: number
+    amount: number
     currency: string
   }
 }
@@ -30,11 +51,21 @@ export interface ExcludedSubscriptionInfo {
 
 export interface FinancialSummary {
   baseCurrency: string
+  /** @deprecated Utiliser monthlyEquivalent */
   monthlyEquivalentMinor: number
+  monthlyEquivalent: number
+  /** @deprecated Utiliser annualEquivalent */
   annualEquivalentMinor: number
+  annualEquivalent: number
+  /** @deprecated Utiliser projected30 */
   projected30Minor: number
+  projected30: number
+  /** @deprecated Utiliser projected90 */
   projected90Minor: number
+  projected90: number
+  /** @deprecated Utiliser expensesYearToDate */
   expensesYearToDateMinor: number
+  expensesYearToDate: number
   includedSubscriptionCount: number
   excludedCurrencySubscriptionCount: number
   excludedSubscriptions: ExcludedSubscriptionInfo[]
@@ -66,22 +97,11 @@ export function validateExchangeRate(currency: string, rate: number): ExchangeRa
   }
 }
 
-export interface FinancialSummary {
-  baseCurrency: string
-  monthlyEquivalentMinor: number
-  annualEquivalentMinor: number
-  projected30Minor: number
-  projected90Minor: number
-  expensesYearToDateMinor: number
-  includedSubscriptionCount: number
-  excludedCurrencySubscriptionCount: number
-  excludedSubscriptions: ExcludedSubscriptionInfo[]
-}
-
 export function computeEquivalentMonthlyCost(subscription: Subscription): number | undefined {
   const interval = resolveBillingInterval(subscription)
+  const price = resolvePrice(subscription)
 
-  if (typeof subscription.currentPriceMinor !== 'number' || !interval) {
+  if (typeof price !== 'number' || !interval) {
     return undefined
   }
 
@@ -91,7 +111,7 @@ export function computeEquivalentMonthlyCost(subscription: Subscription): number
     return undefined
   }
 
-  return Math.round(subscription.currentPriceMinor / months)
+  return Math.round((price / months) * 100) / 100
 }
 
 export function computeEquivalentAnnualCost(subscription: Subscription): number | undefined {
@@ -113,9 +133,16 @@ export function projectSubscriptionPayments(
   const projected: ProjectedPaymentDraft[] = []
   const stepUnit = interval.unit
   const stepCount = interval.count
-  const amountMinor = subscription.currentPriceMinor as number
+  const price = resolvePrice(subscription)
   const currency = subscription.currency as string
   let candidateDate = subscription.nextChargeDate as string
+
+  if (typeof price !== 'number') {
+    return []
+  }
+
+  const amountMinor = Math.round(price * 100)
+  const amount = price
 
   if (subscription.status === 'PAUSED') {
     if (!subscription.pauseUntil) {
@@ -139,6 +166,7 @@ export function projectSubscriptionPayments(
         status: 'PROJECTED',
         amount: {
           amountMinor,
+          amount,
           currency,
         },
       })
@@ -162,8 +190,8 @@ export function buildFinancialSummary(options: {
   const day30 = addDaysToCivilDate(referenceDate, 30)
   const day90 = addDaysToCivilDate(referenceDate, 90)
 
-  let monthlyEquivalentMinor = 0
-  let annualEquivalentMinor = 0
+  let monthlyEquivalent = 0
+  let annualEquivalent = 0
   let includedSubscriptionCount = 0
   let excludedCurrencySubscriptionCount = 0
   const excludedSubscriptions: ExcludedSubscriptionInfo[] = []
@@ -194,22 +222,33 @@ export function buildFinancialSummary(options: {
     const annualCost = computeEquivalentAnnualCost(subscription)
 
     if (typeof monthlyCost === 'number' && typeof annualCost === 'number') {
-      const convertedMonthly = rate ? Math.round(monthlyCost * rate) : monthlyCost
-      const convertedAnnual = rate ? Math.round(annualCost * rate) : annualCost
+      const convertedMonthly = rate ? Math.round(monthlyCost * rate * 100) / 100 : monthlyCost
+      const convertedAnnual = rate ? Math.round(annualCost * rate * 100) / 100 : annualCost
 
-      monthlyEquivalentMinor += convertedMonthly
-      annualEquivalentMinor += convertedAnnual
+      monthlyEquivalent += convertedMonthly
+      annualEquivalent += convertedAnnual
       includedSubscriptionCount += 1
     }
   }
 
   return {
     baseCurrency: options.baseCurrency,
-    monthlyEquivalentMinor,
-    annualEquivalentMinor,
-    projected30Minor: sumPaymentsInWindow(options.payments, options.baseCurrency, options.exchangeRates, referenceDate, day30),
-    projected90Minor: sumPaymentsInWindow(options.payments, options.baseCurrency, options.exchangeRates, referenceDate, day90),
-    expensesYearToDateMinor: sumExpensesYearToDate(
+    monthlyEquivalentMinor: Math.round(monthlyEquivalent * 100),
+    monthlyEquivalent,
+    annualEquivalentMinor: Math.round(annualEquivalent * 100),
+    annualEquivalent,
+    projected30Minor: Math.round(sumPaymentsInWindow(options.payments, options.baseCurrency, options.exchangeRates, referenceDate, day30) * 100),
+    projected30: sumPaymentsInWindow(options.payments, options.baseCurrency, options.exchangeRates, referenceDate, day30),
+    projected90Minor: Math.round(sumPaymentsInWindow(options.payments, options.baseCurrency, options.exchangeRates, referenceDate, day90) * 100),
+    projected90: sumPaymentsInWindow(options.payments, options.baseCurrency, options.exchangeRates, referenceDate, day90),
+    expensesYearToDateMinor: Math.round(sumExpensesYearToDate(
+      options.payments,
+      options.baseCurrency,
+      options.exchangeRates,
+      yearStart,
+      referenceDate,
+    ) * 100),
+    expensesYearToDate: sumExpensesYearToDate(
       options.payments,
       options.baseCurrency,
       options.exchangeRates,
@@ -239,7 +278,7 @@ function canProjectSubscription(
   }
 
   return Boolean(
-    typeof subscription.currentPriceMinor === 'number' &&
+    typeof resolvePrice(subscription) === 'number' &&
       subscription.currency &&
       subscription.nextChargeDate &&
       isValidCivilDate(subscription.nextChargeDate) &&
@@ -339,13 +378,14 @@ function sumPaymentsInWindow(
     }
 
     const paymentCurrency = payment.amount.currency
+    const amount = resolveAmount(payment.amount) ?? 0
     if (paymentCurrency === baseCurrency) {
-      return total + payment.amount.amountMinor
+      return total + amount
     }
 
     const rate = exchangeRates?.[paymentCurrency]
     if (rate) {
-      return total + Math.round(payment.amount.amountMinor * rate)
+      return total + Math.round(amount * rate * 100) / 100
     }
 
     return total
@@ -366,20 +406,22 @@ function sumExpensesYearToDate(
       return total
     }
 
+    const amount = resolveAmount(payment.amount) ?? 0
+
     if (payment.status === 'ASSUMED_PAID' || payment.status === 'CONFIRMED_PAID') {
       const paymentCurrency = payment.amount.currency
       if (paymentCurrency === baseCurrency) {
-        return total + payment.amount.amountMinor
+        return total + amount
       }
 
       const rate = exchangeRates?.[paymentCurrency]
       if (rate) {
-        return total + Math.round(payment.amount.amountMinor * rate)
+        return total + Math.round(amount * rate * 100) / 100
       }
     }
 
     if (payment.status === 'REFUNDED') {
-      return total - payment.amount.amountMinor
+      return total - amount
     }
 
     return total
