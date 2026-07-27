@@ -27,6 +27,11 @@ context: |
   - Separate synchronized business tables from device-local tables.
   - Multi-table operations use Dexie transactions.
   - Local writes must not wait for the network and UI reads must remain reactive.
+  - Dexie Cloud @id primary key constraint: every synchronized table MUST prefix
+    its entity IDs with the 3 first consonants of the table name
+    (e.g., subscriptions → sbs, payments → pym, categories → ctg, settings → stt).
+    Using `db.table.update(id, ...)` may fail with @id; prefer
+    `db.table.put({...existing, ...changes})` instead.
 
   Security:
   - Never place secrets, machine credentials, or dexie-cloud.key in source or builds.
