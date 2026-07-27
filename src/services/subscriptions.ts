@@ -131,6 +131,13 @@ export async function createCategory(
   return category
 }
 
+export async function deleteCategory(
+  id: string,
+  database: SubscriptionDatabase = db,
+): Promise<void> {
+  await database.categories.delete(id)
+}
+
 export async function createSubscription(
   input: UpsertSubscriptionInput,
   database: SubscriptionDatabase = db,

@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import type { SyncState } from 'dexie-cloud-addon'
 import {
   db,
@@ -30,6 +30,7 @@ import {
   computeSubscriptionCompletion,
   createCategory,
   createSubscription,
+  deleteCategory,
   listCategories,
   listSubscriptions,
   type SubscriptionFilters,
@@ -37,7 +38,10 @@ import {
   type SubscriptionValidationError,
   updateSubscription,
 } from './services/subscriptions'
-import { validateExchangeRate } from './services/finance'
+import TopBar from './components/TopBar'
+import DiagnosticDialog from './components/DiagnosticDialog'
+import type { DiagnosticInfo } from './components/DiagnosticDialog'
+import SettingsPage from './pages/SettingsPage'
 
 type OperationStatus =
   | 'aucune-operation'
@@ -265,6 +269,12 @@ function toFormState(subscription: Subscription): SubscriptionFormState {
 }
 
 function App() {
+  const [currentPage, setCurrentPage] = useState<'subscriptions' | 'settings'>(() => {
+    const hash = window.location.hash.slice(1) || '/subscriptions'
+    if (hash.startsWith('/settings')) return 'settings'
+    return 'subscriptions'
+  })
+  const [showDiagnostic, setShowDiagnostic] = useState(false)
   const [syncState, setSyncState] = useState<SyncState>(() => db.cloud.syncState.getValue())
   const [persistedSyncState, setPersistedSyncState] = useState(() =>
     db.cloud.persistedSyncState.getValue(),
@@ -290,11 +300,32 @@ function App() {
   const [sortBy, setSortBy] = useState<SubscriptionSort>('nextChargeDate')
   const [onlyIncomplete, setOnlyIncomplete] = useState(false)
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({})
-  const [newExchangeCurrency, setNewExchangeCurrency] = useState('')
-  const [newExchangeRate, setNewExchangeRate] = useState('')
-  const [exchangeRateErrors, setExchangeRateErrors] = useState<Record<string, string>>({})
 
   const appSyncStatus = useMemo(() => mapSyncStateToAppStatus(syncState), [syncState])
+
+  // Synchronisation hash ↔ état de navigation
+  const navigate = useCallback((page: 'subscriptions' | 'settings') => {
+    setCurrentPage(page)
+    if (page === 'subscriptions') {
+      window.location.hash = '/subscriptions'
+    } else {
+      window.location.hash = '/settings'
+    }
+  }, [])
+
+  useEffect(() => {
+    function handleHashChange() {
+      const hash = window.location.hash.slice(1) || '/subscriptions'
+      if (hash.startsWith('/settings')) {
+        setCurrentPage('settings')
+      } else {
+        setCurrentPage('subscriptions')
+      }
+    }
+
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [])
 
   useEffect(() => {
     const syncSubscription = db.cloud.syncState.subscribe(setSyncState)
@@ -493,24 +524,10 @@ function App() {
     }
   }
 
-  async function handleAddExchangeRate() {
-    setExchangeRateErrors({})
-
-    const trimmedCurrency = newExchangeCurrency.trim().toUpperCase()
-    const parsedRate = newExchangeRate.trim() ? Number(newExchangeRate.trim()) : NaN
-
-    const validation = validateExchangeRate(trimmedCurrency, parsedRate)
-    if (!validation.isValid) {
-      setExchangeRateErrors(validation.errors)
-      return
-    }
-
-    const updatedRates = { ...exchangeRates, [trimmedCurrency]: parsedRate }
+  async function handleAddExchangeRate(currency: string, rate: number) {
+    const updatedRates = { ...exchangeRates, [currency]: rate }
     setExchangeRates(updatedRates)
-    setNewExchangeCurrency('')
-    setNewExchangeRate('')
-    setExchangeRateErrors({})
-    setFeedback(`Taux de conversion ${trimmedCurrency}→EUR: ${parsedRate} enregistré.`)
+    setFeedback(`Taux de conversion ${currency}→EUR: ${rate} enregistré.`)
 
     try {
       const settings = await db.settings.where('key').equals('main').first()
@@ -646,6 +663,17 @@ function App() {
     }
   }
 
+  async function handleDeleteCategory(id: string) {
+    try {
+      await deleteCategory(id)
+      await refreshCategories()
+    } catch (error) {
+      setFeedback(
+        `Impossible de supprimer la catégorie: ${error instanceof Error ? error.message : 'erreur inconnue'}`,
+      )
+    }
+  }
+
   async function handlePaymentAction(payment: Payment, status: PaymentStatus) {
     await updatePaymentStatus(payment.id, {
       status,
@@ -656,404 +684,145 @@ function App() {
     await refreshFinance()
   }
 
-  const identityLabel = identity.isLoggedIn
-    ? identity.email ?? identity.userId ?? identity.name ?? 'Connecté'
-    : 'Non connecté'
+  const identityLabel = useMemo(
+    () => identity.isLoggedIn
+      ? identity.email ?? identity.userId ?? identity.name ?? 'Connecté'
+      : 'Non connecté',
+    [identity],
+  )
 
   const lastSyncDate = persistedSyncState?.timestamp
     ? persistedSyncState.timestamp.toISOString()
     : 'N/A'
 
+  const diagnosticInfo: DiagnosticInfo = {
+    appVersion: import.meta.env.VITE_APP_VERSION ?? '0.0.0-dev',
+    dbName: DEFAULT_DB_NAME,
+    identityLabel,
+    networkOnline,
+    syncStatusLabel: getSyncStatusLabel(appSyncStatus),
+    lastSyncDate,
+    environment: import.meta.env.VITE_APP_ENVIRONMENT ?? 'development',
+  }
+
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="/" aria-label="Abos, accueil">
-          <span className="brand-mark" aria-hidden="true">
-            A
-          </span>
-          <span>Abos</span>
-        </a>
-        <span className="usage-label">Espace personnel</span>
-      </header>
+      <TopBar
+        currentPage={currentPage}
+        onNavigate={navigate}
+        onOpenDiagnostic={() => setShowDiagnostic(true)}
+        identity={identity}
+      />
 
-      <main className="main-content">
-        <header className="page-header">
-          <div>
-            <p className="section-label">Vue principale</p>
-            <h1>Abonnements</h1>
-          </div>
-          <p className="item-count" aria-label="Nombre d'abonnements">
-            {subscriptions.length} abonnement{subscriptions.length > 1 ? 's' : ''}
-          </p>
-        </header>
+      <DiagnosticDialog
+        isOpen={showDiagnostic}
+        onClose={() => setShowDiagnostic(false)}
+        info={diagnosticInfo}
+      />
 
-        <section className="status-panel" aria-label="Statut global de synchronisation">
-          <div>
-            <p className="status-title">Synchronisation</p>
-            <p className="status-value">{getSyncStatusLabel(appSyncStatus)}</p>
-          </div>
-          <div>
-            <p className="status-title">Dernière opération locale</p>
-            <p className="status-value">{getOperationLabel(effectiveOperationStatus)}</p>
-          </div>
-          <button type="button" className="secondary-button" onClick={handleSyncNow}>
-            Synchroniser maintenant
-          </button>
-        </section>
+      {currentPage === 'settings' ? (
+        <main className="main-content">
+          <SettingsPage
+            categories={categories}
+            exchangeRates={exchangeRates}
+            newCategoryName={newCategoryName}
+            email={email}
+            identityLabel={identityLabel}
+            syncState={syncState}
+            onCreateCategory={handleCreateCategory}
+            onDeleteCategory={handleDeleteCategory}
+            onNewCategoryNameChange={setNewCategoryName}
+            onAddExchangeRate={handleAddExchangeRate}
+            onRemoveExchangeRate={handleRemoveExchangeRate}
+            onLogin={handleLogin}
+            onLogout={handleLogout}
+            onEmailChange={setEmail}
+            onSaveLocalDraft={handleSaveLocalDraft}
+            onPurgeLocalData={handlePurgeLocalData}
+          />
+        </main>
+      ) : (
+        <main className="main-content">
+          <header className="page-header">
+            <div>
+              <p className="section-label">Vue principale</p>
+              <h1>Abonnements</h1>
+            </div>
+            <p className="item-count" aria-label="Nombre d'abonnements">
+              {subscriptions.length} abonnement{subscriptions.length > 1 ? 's' : ''}
+            </p>
+          </header>
 
-        <section className="control-card" aria-labelledby="exchange-rates-title">
-          <h2 id="exchange-rates-title">Taux de conversion</h2>
-          <p>Configurez les taux de conversion pour inclure les abonnements en devise étrangère dans les totaux consolidés (1 unité devise = X EUR).</p>
-          {Object.keys(exchangeRates).length > 0 ? (
-            <ul className="payment-list">
-              {Object.entries(exchangeRates).map(([currency, rate]) => (
-                <li key={currency} className="payment-item">
-                  <div>
-                    <p className="payment-status payment-status-confirmed_paid">{currency} → EUR</p>
-                    <p>Taux: {rate}</p>
-                  </div>
-                  <div className="button-row">
-                    <button type="button" className="danger-button" onClick={() => void handleRemoveExchangeRate(currency)}>
-                      Supprimer
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>Aucun taux de conversion configuré. Les abonnements en devise étrangère sont exclus des totaux.</p>
-          )}
-          <div className="category-row">
-            <input
-              value={newExchangeCurrency}
-              onChange={event => setNewExchangeCurrency(event.target.value)}
-              placeholder="Devise (ex: USD)"
-              maxLength={3}
-              style={{ textTransform: 'uppercase' }}
-            />
-            <input
-              value={newExchangeRate}
-              onChange={event => setNewExchangeRate(event.target.value)}
-              placeholder="Taux (ex: 0.92)"
-              type="number"
-              step="any"
-              min="0"
-            />
-            <button type="button" onClick={() => void handleAddExchangeRate()}>
-              Ajouter
+          <section className="status-panel" aria-label="Statut global de synchronisation">
+            <div>
+              <p className="status-title">Synchronisation</p>
+              <p className="status-value">{getSyncStatusLabel(appSyncStatus)}</p>
+            </div>
+            <div>
+              <p className="status-title">Dernière opération locale</p>
+              <p className="status-value">{getOperationLabel(effectiveOperationStatus)}</p>
+            </div>
+            <button type="button" className="secondary-button" onClick={handleSyncNow}>
+              Synchroniser maintenant
             </button>
-          </div>
-          {exchangeRateErrors.currency ? <span className="field-error">{exchangeRateErrors.currency}</span> : null}
-          {exchangeRateErrors.rate ? <span className="field-error">{exchangeRateErrors.rate}</span> : null}
-        </section>
+          </section>
 
-        <section className="summary-grid" aria-labelledby="financial-summary-title">
-          <article className="summary-card">
-            <p className="status-title">Coût mensuel équivalent</p>
-            <h2 id="financial-summary-title">
-              {formatMoney(summary.monthlyEquivalent, summary.baseCurrency)}
-            </h2>
-            <p>{summary.includedSubscriptionCount} abonnement(s) inclus</p>
-          </article>
-          <article className="summary-card">
-            <p className="status-title">Coût annuel équivalent</p>
-            <h2>{formatMoney(summary.annualEquivalent, summary.baseCurrency)}</h2>
-            <p>
-              Base consolidée: {summary.baseCurrency}
-              {summary.excludedCurrencySubscriptionCount > 0
-                ? ` | ${summary.excludedCurrencySubscriptionCount} exclu(s)`
-                : ''}
-              {Object.keys(exchangeRates).length > 0
-                ? ` | ${Object.keys(exchangeRates).length} taux configuré(s)`
-                : ''}
-            </p>
-          </article>
-          <article className="summary-card">
-            <p className="status-title">Décaissements à 30 jours</p>
-            <h2>{formatMoney(summary.projected30, summary.baseCurrency)}</h2>
-            <p>Projection locale</p>
-          </article>
-          <article className="summary-card">
-            <p className="status-title">Décaissements à 90 jours</p>
-            <h2>{formatMoney(summary.projected90, summary.baseCurrency)}</h2>
-            <p>
-              Dépenses YTD: {formatMoney(summary.expensesYearToDate, summary.baseCurrency)}
-            </p>
-          </article>
-        </section>
+          <section className="summary-grid" aria-labelledby="financial-summary-title">
+            <article className="summary-card">
+              <p className="status-title">Coût mensuel équivalent</p>
+              <h2 id="financial-summary-title">
+                {formatMoney(summary.monthlyEquivalent, summary.baseCurrency)}
+              </h2>
+              <p>{summary.includedSubscriptionCount} abonnement(s) inclus</p>
+            </article>
+            <article className="summary-card">
+              <p className="status-title">Coût annuel équivalent</p>
+              <h2>{formatMoney(summary.annualEquivalent, summary.baseCurrency)}</h2>
+              <p>
+                Base consolidée: {summary.baseCurrency}
+                {summary.excludedCurrencySubscriptionCount > 0
+                  ? ` | ${summary.excludedCurrencySubscriptionCount} exclu(s)`
+                  : ''}
+                {Object.keys(exchangeRates).length > 0
+                  ? ` | ${Object.keys(exchangeRates).length} taux configuré(s)`
+                  : ''}
+              </p>
+            </article>
+            <article className="summary-card">
+              <p className="status-title">Décaissements à 30 jours</p>
+              <h2>{formatMoney(summary.projected30, summary.baseCurrency)}</h2>
+              <p>Projection locale</p>
+            </article>
+            <article className="summary-card">
+              <p className="status-title">Décaissements à 90 jours</p>
+              <h2>{formatMoney(summary.projected90, summary.baseCurrency)}</h2>
+              <p>
+                Dépenses YTD: {formatMoney(summary.expensesYearToDate, summary.baseCurrency)}
+              </p>
+            </article>
+          </section>
 
-        <section className="controls-grid" aria-label="Actions de connexion et de stockage">
-          <article className="control-card">
-            <h2>Connexion Dexie Cloud</h2>
-            <label htmlFor="email-input">Adresse e-mail</label>
-            <input
-              id="email-input"
-              name="email"
-              type="email"
-              placeholder="prenom.nom@example.com"
-              value={email}
-              onChange={event => setEmail(event.target.value)}
-            />
-            <div className="button-row">
-              <button type="button" onClick={handleLogin}>
-                Se connecter (OTP)
-              </button>
-              <button type="button" className="secondary-button" onClick={handleLogout}>
-                Se déconnecter
-              </button>
-            </div>
-          </article>
+          {feedback ? <p className="feedback">{feedback}</p> : null}
 
-          <article className="control-card">
-            <h2>Local-first</h2>
-            <p>
-              Les écritures sont validées localement sur cet appareil avant la synchronisation
-              réseau.
-            </p>
-            <div className="button-row">
-              <button type="button" onClick={handleSaveLocalDraft}>
-                Enregistrer un brouillon local
-              </button>
-              <button type="button" className="danger-button" onClick={handlePurgeLocalData}>
-                Purger les données locales
-              </button>
-            </div>
-          </article>
-        </section>
-
-        {feedback ? <p className="feedback">{feedback}</p> : null}
-
-        <section className="control-card" aria-labelledby="filters-title">
-          <h2 id="filters-title">Recherche, filtres et tri</h2>
-          <div className="form-grid form-grid-compact">
-            <label>
-              Recherche
-              <input
-                type="search"
-                value={search}
-                onChange={event => setSearch(event.target.value)}
-                placeholder="Nom, fournisseur, notes"
-              />
-            </label>
-            <label>
-              Statut
-              <select
-                value={statusFilter}
-                onChange={event => setStatusFilter(event.target.value as SubscriptionStatus | 'ALL')}
-              >
-                <option value="ALL">Tous</option>
-                {STATUS_OPTIONS.map(status => (
-                  <option key={status} value={status}>
-                    {STATUS_LABELS[status]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Catégorie
-              <select value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}>
-                <option value="ALL">Toutes</option>
-                {categories.map(category => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Renouvellement
-              <select
-                value={renewalFilter}
-                onChange={event => setRenewalFilter(event.target.value as RenewalMode | 'ALL')}
-              >
-                <option value="ALL">Tous</option>
-                {RENEWAL_OPTIONS.map(mode => (
-                  <option key={mode} value={mode}>
-                    {RENEWAL_LABELS[mode]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Tri principal
-              <select value={sortBy} onChange={event => setSortBy(event.target.value as SubscriptionSort)}>
-                <option value="nextChargeDate">Prochaine échéance</option>
-                <option value="updatedAt">Dernière mise à jour</option>
-              </select>
-            </label>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={onlyIncomplete}
-                onChange={event => setOnlyIncomplete(event.target.checked)}
-              />
-              Uniquement les abonnements incomplets
-            </label>
-          </div>
-        </section>
-
-        <section className="list-section" aria-labelledby="list-title">
-          <h2 id="list-title">Liste des abonnements</h2>
-          {subscriptions.length === 0 ? (
-            <p>Aucun abonnement ne correspond aux filtres.</p>
-          ) : (
-            <ul className="subscription-list">
-              {subscriptions.map(subscription => {
-                const completion = computeSubscriptionCompletion(subscription)
-                const exclusion = summary.excludedSubscriptions.find(ex => ex.id === subscription.id)
-                const subCurrency = subscription.currency
-                const hasConversion = Boolean(
-                  !exclusion &&
-                    subCurrency &&
-                    subCurrency !== summary.baseCurrency &&
-                    exchangeRates[subCurrency],
-                )
-
-                return (
-                  <li key={subscription.id} className="subscription-item">
-                    <div>
-                      <h3>
-                        {subscription.name}
-                        {exclusion ? (
-                          <span className="exclusion-badge" title={exclusion.reason}>
-                            ⚠️ Exclu
-                          </span>
-                        ) : null}
-                        {hasConversion && subCurrency ? (
-                          <span
-                            className="conversion-badge"
-                            title={`Taux ${subCurrency}→${summary.baseCurrency}: ${exchangeRates[subCurrency]}`}
-                          >
-                            💱 Converti
-                          </span>
-                        ) : null}
-                      </h3>
-                      <p>
-                        Statut: {STATUS_LABELS[subscription.status]} | Renouvellement:{' '}
-                        {RENEWAL_LABELS[subscription.renewalMode]}
-                      </p>
-                      <p>
-                        Facturation: {formatInterval(subscription.billingIntervalCount, subscription.billingIntervalUnit)}
-                      </p>
-                      <p>
-                        Prochaine échéance: {subscription.nextChargeDate ?? 'Non renseignée'} |
-                        {' '}Complétude: {completion.score}%
-                      </p>
-                      {typeof subscription.currentPrice === 'number' && subscription.currency ? (
-                        <p>
-                          Tarif courant: {formatMoney(subscription.currentPrice, subscription.currency)}
-                        </p>
-                      ) : null}
-                      {subscription.notes ? <p>Notes: {subscription.notes}</p> : null}
-                    </div>
-                    <div className="button-row">
-                      <button type="button" onClick={() => handleEditSubscription(subscription)}>
-                        Modifier
-                      </button>
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={() => {
-                          void handleArchiveSubscription(subscription.id)
-                        }}
-                      >
-                        Archiver
-                      </button>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </section>
-
-        <section className="control-card" aria-labelledby="payments-title">
-          <h2 id="payments-title">Paiements</h2>
-          {payments.length === 0 ? (
-            <p>Aucun paiement projeté ou enregistré pour le moment.</p>
-          ) : (
-            <ul className="payment-list">
-              {payments.map(payment => (
-                <li key={payment.id} className="payment-item">
-                  <div>
-                    <p className={`payment-status payment-status-${payment.status.toLowerCase()}`}>
-                      {PAYMENT_STATUS_LABELS[payment.status]}
-                    </p>
-                    <h3>{payment.scheduledDate}</h3>
-                    <p>{formatMoney(payment.amount.amount, payment.amount.currency)}</p>
-                    <p>Abonnement: {payment.subscriptionId}</p>
-                  </div>
-                  <div className="button-row">
-                    {payment.status === 'PROJECTED' || payment.status === 'ASSUMED_PAID' ? (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() => {
-                          void handlePaymentAction(payment, 'CONFIRMED_PAID')
-                        }}
-                      >
-                        Confirmer
-                      </button>
-                    ) : null}
-                    {payment.status !== 'SKIPPED' ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handlePaymentAction(payment, 'SKIPPED')
-                        }}
-                      >
-                        Ignorer
-                      </button>
-                    ) : null}
-                    {payment.status === 'ASSUMED_PAID' || payment.status === 'CONFIRMED_PAID' ? (
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={() => {
-                          void handlePaymentAction(payment, 'REFUNDED')
-                        }}
-                      >
-                        Rembourser
-                      </button>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="control-card" aria-labelledby="form-title">
-          <h2 id="form-title">
-            {editingSubscriptionId ? 'Modifier un abonnement' : 'Créer un abonnement'}
-          </h2>
-          <form onSubmit={handleSubmitSubscription} noValidate>
-            <div className="form-grid">
+          <section className="control-card" aria-labelledby="filters-title">
+            <h2 id="filters-title">Recherche, filtres et tri</h2>
+            <div className="form-grid form-grid-compact">
               <label>
-                Nom
-                <input value={formState.name} onChange={event => updateFormField('name', event.target.value)} />
-                {formErrors.name ? <span className="field-error">{formErrors.name}</span> : null}
-              </label>
-              <label>
-                Fournisseur
-                <input value={formState.provider} onChange={event => updateFormField('provider', event.target.value)} />
-              </label>
-              <label>
-                Plan
-                <input value={formState.planName} onChange={event => updateFormField('planName', event.target.value)} />
-              </label>
-              <label>
-                Prix
-                <input value={formState.currentPrice} onChange={event => updateFormField('currentPrice', event.target.value)} />
-                {formErrors.currentPrice ? <span className="field-error">{formErrors.currentPrice}</span> : null}
-              </label>
-              <label>
-                Devise
-                <input value={formState.currency} onChange={event => updateFormField('currency', event.target.value)} />
+                Recherche
+                <input
+                  type="search"
+                  value={search}
+                  onChange={event => setSearch(event.target.value)}
+                  placeholder="Nom, fournisseur, notes"
+                />
               </label>
               <label>
                 Statut
-                <select value={formState.status} onChange={event => updateFormField('status', event.target.value as SubscriptionStatus)}>
+                <select
+                  value={statusFilter}
+                  onChange={event => setStatusFilter(event.target.value as SubscriptionStatus | 'ALL')}
+                >
+                  <option value="ALL">Tous</option>
                   {STATUS_OPTIONS.map(status => (
                     <option key={status} value={status}>
                       {STATUS_LABELS[status]}
@@ -1062,66 +831,9 @@ function App() {
                 </select>
               </label>
               <label>
-                Mode de renouvellement
-                <select value={formState.renewalMode} onChange={event => updateFormField('renewalMode', event.target.value as RenewalMode)}>
-                  {RENEWAL_OPTIONS.map(mode => (
-                    <option key={mode} value={mode}>
-                      {RENEWAL_LABELS[mode]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Facturation: quantité
-                <input value={formState.billingIntervalCount} onChange={event => updateFormField('billingIntervalCount', event.target.value)} />
-              </label>
-              <label>
-                Facturation: unité
-                <select value={formState.billingIntervalUnit} onChange={event => updateFormField('billingIntervalUnit', event.target.value as IntervalUnit)}>
-                  {INTERVAL_UNIT_OPTIONS.map(unit => (
-                    <option key={unit} value={unit}>
-                      {INTERVAL_LABELS[unit]}
-                    </option>
-                  ))}
-                </select>
-                {formErrors.billingInterval ? <span className="field-error">{formErrors.billingInterval}</span> : null}
-              </label>
-              <label>
-                Engagement: quantité
-                <input value={formState.commitmentIntervalCount} onChange={event => updateFormField('commitmentIntervalCount', event.target.value)} />
-              </label>
-              <label>
-                Engagement: unité
-                <select value={formState.commitmentIntervalUnit} onChange={event => updateFormField('commitmentIntervalUnit', event.target.value as IntervalUnit | '')}>
-                  <option value="">Aucune</option>
-                  {INTERVAL_UNIT_OPTIONS.map(unit => (
-                    <option key={unit} value={unit}>
-                      {INTERVAL_LABELS[unit]}
-                    </option>
-                  ))}
-                </select>
-                {formErrors.commitmentInterval ? <span className="field-error">{formErrors.commitmentInterval}</span> : null}
-              </label>
-              <label>
-                Renouvellement: quantité
-                <input value={formState.renewalIntervalCount} onChange={event => updateFormField('renewalIntervalCount', event.target.value)} />
-              </label>
-              <label>
-                Renouvellement: unité
-                <select value={formState.renewalIntervalUnit} onChange={event => updateFormField('renewalIntervalUnit', event.target.value as IntervalUnit | '')}>
-                  <option value="">Aucun</option>
-                  {INTERVAL_UNIT_OPTIONS.map(unit => (
-                    <option key={unit} value={unit}>
-                      {INTERVAL_LABELS[unit]}
-                    </option>
-                  ))}
-                </select>
-                {formErrors.renewalInterval ? <span className="field-error">{formErrors.renewalInterval}</span> : null}
-              </label>
-              <label>
                 Catégorie
-                <select value={formState.categoryId} onChange={event => updateFormField('categoryId', event.target.value)}>
-                  <option value="">Aucune</option>
+                <select value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}>
+                  <option value="ALL">Toutes</option>
                   {categories.map(category => (
                     <option key={category.id} value={category.id}>
                       {category.name}
@@ -1130,146 +842,375 @@ function App() {
                 </select>
               </label>
               <label>
-                Prochaine échéance
-                <input type="date" value={formState.nextChargeDate} onChange={event => updateFormField('nextChargeDate', event.target.value)} />
-                {formErrors.nextChargeDate ? <span className="field-error">{formErrors.nextChargeDate}</span> : null}
+                Renouvellement
+                <select
+                  value={renewalFilter}
+                  onChange={event => setRenewalFilter(event.target.value as RenewalMode | 'ALL')}
+                >
+                  <option value="ALL">Tous</option>
+                  {RENEWAL_OPTIONS.map(mode => (
+                    <option key={mode} value={mode}>
+                      {RENEWAL_LABELS[mode]}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
-                Fin de pause
-                <input type="date" value={formState.pauseUntil} onChange={event => updateFormField('pauseUntil', event.target.value)} />
-                {formErrors.pauseUntil ? <span className="field-error">{formErrors.pauseUntil}</span> : null}
+                Tri principal
+                <select value={sortBy} onChange={event => setSortBy(event.target.value as SubscriptionSort)}>
+                  <option value="nextChargeDate">Prochaine échéance</option>
+                  <option value="updatedAt">Dernière mise à jour</option>
+                </select>
               </label>
-              <label>
-                Fin de service
-                <input type="date" value={formState.serviceEndDate} onChange={event => updateFormField('serviceEndDate', event.target.value)} />
-                {formErrors.serviceEndDate ? <span className="field-error">{formErrors.serviceEndDate}</span> : null}
-              </label>
-              <label>
-                URL de gestion
-                <input value={formState.managementUrl} onChange={event => updateFormField('managementUrl', event.target.value)} />
-                {formErrors.managementUrl ? <span className="field-error">{formErrors.managementUrl}</span> : null}
-              </label>
-              <label>
-                URL de résiliation
-                <input value={formState.cancellationUrl} onChange={event => updateFormField('cancellationUrl', event.target.value)} />
-                {formErrors.cancellationUrl ? <span className="field-error">{formErrors.cancellationUrl}</span> : null}
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={onlyIncomplete}
+                  onChange={event => setOnlyIncomplete(event.target.checked)}
+                />
+                Uniquement les abonnements incomplets
               </label>
             </div>
+          </section>
 
-            <label>
-              Instructions de résiliation
-              <textarea value={formState.cancellationInstructions} onChange={event => updateFormField('cancellationInstructions', event.target.value)} />
-            </label>
-            <label>
-              Notes
-              <textarea value={formState.notes} onChange={event => updateFormField('notes', event.target.value)} />
-            </label>
+          <section className="list-section" aria-labelledby="list-title">
+            <h2 id="list-title">Liste des abonnements</h2>
+            {subscriptions.length === 0 ? (
+              <p>Aucun abonnement ne correspond aux filtres.</p>
+            ) : (
+              <ul className="subscription-list">
+                {subscriptions.map(subscription => {
+                  const completion = computeSubscriptionCompletion(subscription)
+                  const exclusion = summary.excludedSubscriptions.find(ex => ex.id === subscription.id)
+                  const subCurrency = subscription.currency
+                  const hasConversion = Boolean(
+                    !exclusion &&
+                      subCurrency &&
+                      subCurrency !== summary.baseCurrency &&
+                      exchangeRates[subCurrency],
+                  )
 
-            <div className="button-row">
-              <button type="submit">
-                {editingSubscriptionId ? 'Enregistrer les modifications' : 'Créer'}
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => {
-                  setEditingSubscriptionId(null)
-                  setFormErrors({})
-                  setFormState(EMPTY_FORM)
-                }}
-              >
-                Réinitialiser le formulaire
-              </button>
-            </div>
-          </form>
-
-          <div className="category-row">
-            <input value={newCategoryName} onChange={event => setNewCategoryName(event.target.value)} placeholder="Nouvelle catégorie" />
-            <button type="button" onClick={() => void handleCreateCategory()}>
-              Ajouter la catégorie
-            </button>
-          </div>
-        </section>
-
-        <section className="control-card" aria-labelledby="incomplete-title">
-          <h2 id="incomplete-title">À compléter</h2>
-          {incompleteSubscriptions.length === 0 ? (
-            <p>Tous les abonnements visibles sont complets.</p>
-          ) : (
-            <ul className="incomplete-list">
-              {incompleteSubscriptions.map(subscription => {
-                const completion = computeSubscriptionCompletion(subscription)
-                return (
-                  <li key={subscription.id}>
-                    <strong>{subscription.name}</strong>: {completion.label}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-          {summary.excludedCurrencySubscriptionCount > 0 ? (
-            <details className="exclusion-details">
-              <summary>{summary.excludedCurrencySubscriptionCount} abonnement(s) exclu(s) des totaux consolidés</summary>
-              <ul className="incomplete-list">
-                {summary.excludedSubscriptions.map(ex => {
-                  const sub = subscriptions.find(s => s.id === ex.id)
                   return (
-                    <li key={ex.id}>
-                      <strong>{sub?.name ?? ex.id}</strong>: {ex.reason}
+                    <li key={subscription.id} className="subscription-item">
+                      <div>
+                        <h3>
+                          {subscription.name}
+                          {exclusion ? (
+                            <span className="exclusion-badge" title={exclusion.reason}>
+                              ⚠️ Exclu
+                            </span>
+                          ) : null}
+                          {hasConversion && subCurrency ? (
+                            <span
+                              className="conversion-badge"
+                              title={`Taux ${subCurrency}→${summary.baseCurrency}: ${exchangeRates[subCurrency]}`}
+                            >
+                              💱 Converti
+                            </span>
+                          ) : null}
+                        </h3>
+                        <p>
+                          Statut: {STATUS_LABELS[subscription.status]} | Renouvellement:{' '}
+                          {RENEWAL_LABELS[subscription.renewalMode]}
+                        </p>
+                        <p>
+                          Facturation: {formatInterval(subscription.billingIntervalCount, subscription.billingIntervalUnit)}
+                        </p>
+                        <p>
+                          Prochaine échéance: {subscription.nextChargeDate ?? 'Non renseignée'} |
+                          {' '}Complétude: {completion.score}%
+                        </p>
+                        {typeof subscription.currentPrice === 'number' && subscription.currency ? (
+                          <p>
+                            Tarif courant: {formatMoney(subscription.currentPrice, subscription.currency)}
+                          </p>
+                        ) : null}
+                        {subscription.notes ? <p>Notes: {subscription.notes}</p> : null}
+                      </div>
+                      <div className="button-row">
+                        <button type="button" onClick={() => handleEditSubscription(subscription)}>
+                          Modifier
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-button"
+                          onClick={() => {
+                            void handleArchiveSubscription(subscription.id)
+                          }}
+                        >
+                          Archiver
+                        </button>
+                      </div>
                     </li>
                   )
                 })}
               </ul>
-            </details>
-          ) : null}
-        </section>
-
-        {subscriptions.length === 0 ? (
-          <section className="empty-state" aria-labelledby="empty-state-title">
-            <span className="empty-state-icon" aria-hidden="true">
-              <span />
-            </span>
-            <div>
-              <h2 id="empty-state-title">Aucun abonnement enregistré</h2>
-              <p>Utilisez le formulaire ci-dessus pour créer une première fiche.</p>
-            </div>
+            )}
           </section>
-        ) : null}
 
-        <section className="diagnostics" aria-labelledby="diagnostics-title">
-          <h2 id="diagnostics-title">Diagnostic</h2>
-          <dl>
-            <div>
-              <dt>Version applicative</dt>
-              <dd>{import.meta.env.VITE_APP_VERSION ?? '0.0.0-dev'}</dd>
-            </div>
-            <div>
-              <dt>Base locale</dt>
-              <dd>{DEFAULT_DB_NAME}</dd>
-            </div>
-            <div>
-              <dt>Identité connectée</dt>
-              <dd>{identityLabel}</dd>
-            </div>
-            <div>
-              <dt>Statut réseau</dt>
-              <dd>{networkOnline ? 'En ligne' : 'Hors ligne'}</dd>
-            </div>
-            <div>
-              <dt>Statut Dexie Cloud</dt>
-              <dd>{getSyncStatusLabel(appSyncStatus)}</dd>
-            </div>
-            <div>
-              <dt>Dernière synchronisation</dt>
-              <dd>{lastSyncDate}</dd>
-            </div>
-            <div>
-              <dt>Environnement</dt>
-              <dd>{import.meta.env.VITE_APP_ENVIRONMENT ?? 'development'}</dd>
-            </div>
-          </dl>
-        </section>
-      </main>
+          <section className="control-card" aria-labelledby="payments-title">
+            <h2 id="payments-title">Paiements</h2>
+            {payments.length === 0 ? (
+              <p>Aucun paiement projeté ou enregistré pour le moment.</p>
+            ) : (
+              <ul className="payment-list">
+                {payments.map(payment => (
+                  <li key={payment.id} className="payment-item">
+                    <div>
+                      <p className={`payment-status payment-status-${payment.status.toLowerCase()}`}>
+                        {PAYMENT_STATUS_LABELS[payment.status]}
+                      </p>
+                      <h3>{payment.scheduledDate}</h3>
+                      <p>{formatMoney(payment.amount.amount, payment.amount.currency)}</p>
+                      <p>Abonnement: {payment.subscriptionId}</p>
+                    </div>
+                    <div className="button-row">
+                      {payment.status === 'PROJECTED' || payment.status === 'ASSUMED_PAID' ? (
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => {
+                            void handlePaymentAction(payment, 'CONFIRMED_PAID')
+                          }}
+                        >
+                          Confirmer
+                        </button>
+                      ) : null}
+                      {payment.status !== 'SKIPPED' ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handlePaymentAction(payment, 'SKIPPED')
+                          }}
+                        >
+                          Ignorer
+                        </button>
+                      ) : null}
+                      {payment.status === 'ASSUMED_PAID' || payment.status === 'CONFIRMED_PAID' ? (
+                        <button
+                          type="button"
+                          className="danger-button"
+                          onClick={() => {
+                            void handlePaymentAction(payment, 'REFUNDED')
+                          }}
+                        >
+                          Rembourser
+                        </button>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="control-card" aria-labelledby="form-title">
+            <h2 id="form-title">
+              {editingSubscriptionId ? 'Modifier un abonnement' : 'Créer un abonnement'}
+            </h2>
+            <form onSubmit={handleSubmitSubscription} noValidate>
+              <div className="form-grid">
+                <label>
+                  Nom
+                  <input value={formState.name} onChange={event => updateFormField('name', event.target.value)} />
+                  {formErrors.name ? <span className="field-error">{formErrors.name}</span> : null}
+                </label>
+                <label>
+                  Fournisseur
+                  <input value={formState.provider} onChange={event => updateFormField('provider', event.target.value)} />
+                </label>
+                <label>
+                  Plan
+                  <input value={formState.planName} onChange={event => updateFormField('planName', event.target.value)} />
+                </label>
+                <label>
+                  Prix
+                  <input value={formState.currentPrice} onChange={event => updateFormField('currentPrice', event.target.value)} />
+                  {formErrors.currentPrice ? <span className="field-error">{formErrors.currentPrice}</span> : null}
+                </label>
+                <label>
+                  Devise
+                  <input value={formState.currency} onChange={event => updateFormField('currency', event.target.value)} />
+                </label>
+                <label>
+                  Statut
+                  <select value={formState.status} onChange={event => updateFormField('status', event.target.value as SubscriptionStatus)}>
+                    {STATUS_OPTIONS.map(status => (
+                      <option key={status} value={status}>
+                        {STATUS_LABELS[status]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Mode de renouvellement
+                  <select value={formState.renewalMode} onChange={event => updateFormField('renewalMode', event.target.value as RenewalMode)}>
+                    {RENEWAL_OPTIONS.map(mode => (
+                      <option key={mode} value={mode}>
+                        {RENEWAL_LABELS[mode]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Facturation: quantité
+                  <input value={formState.billingIntervalCount} onChange={event => updateFormField('billingIntervalCount', event.target.value)} />
+                </label>
+                <label>
+                  Facturation: unité
+                  <select value={formState.billingIntervalUnit} onChange={event => updateFormField('billingIntervalUnit', event.target.value as IntervalUnit)}>
+                    {INTERVAL_UNIT_OPTIONS.map(unit => (
+                      <option key={unit} value={unit}>
+                        {INTERVAL_LABELS[unit]}
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.billingInterval ? <span className="field-error">{formErrors.billingInterval}</span> : null}
+                </label>
+                <label>
+                  Engagement: quantité
+                  <input value={formState.commitmentIntervalCount} onChange={event => updateFormField('commitmentIntervalCount', event.target.value)} />
+                </label>
+                <label>
+                  Engagement: unité
+                  <select value={formState.commitmentIntervalUnit} onChange={event => updateFormField('commitmentIntervalUnit', event.target.value as IntervalUnit | '')}>
+                    <option value="">Aucune</option>
+                    {INTERVAL_UNIT_OPTIONS.map(unit => (
+                      <option key={unit} value={unit}>
+                        {INTERVAL_LABELS[unit]}
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.commitmentInterval ? <span className="field-error">{formErrors.commitmentInterval}</span> : null}
+                </label>
+                <label>
+                  Renouvellement: quantité
+                  <input value={formState.renewalIntervalCount} onChange={event => updateFormField('renewalIntervalCount', event.target.value)} />
+                </label>
+                <label>
+                  Renouvellement: unité
+                  <select value={formState.renewalIntervalUnit} onChange={event => updateFormField('renewalIntervalUnit', event.target.value as IntervalUnit | '')}>
+                    <option value="">Aucun</option>
+                    {INTERVAL_UNIT_OPTIONS.map(unit => (
+                      <option key={unit} value={unit}>
+                        {INTERVAL_LABELS[unit]}
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.renewalInterval ? <span className="field-error">{formErrors.renewalInterval}</span> : null}
+                </label>
+                <label>
+                  Catégorie
+                  <select value={formState.categoryId} onChange={event => updateFormField('categoryId', event.target.value)}>
+                    <option value="">Aucune</option>
+                    {categories.map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Prochaine échéance
+                  <input type="date" value={formState.nextChargeDate} onChange={event => updateFormField('nextChargeDate', event.target.value)} />
+                  {formErrors.nextChargeDate ? <span className="field-error">{formErrors.nextChargeDate}</span> : null}
+                </label>
+                <label>
+                  Fin de pause
+                  <input type="date" value={formState.pauseUntil} onChange={event => updateFormField('pauseUntil', event.target.value)} />
+                  {formErrors.pauseUntil ? <span className="field-error">{formErrors.pauseUntil}</span> : null}
+                </label>
+                <label>
+                  Fin de service
+                  <input type="date" value={formState.serviceEndDate} onChange={event => updateFormField('serviceEndDate', event.target.value)} />
+                  {formErrors.serviceEndDate ? <span className="field-error">{formErrors.serviceEndDate}</span> : null}
+                </label>
+                <label>
+                  URL de gestion
+                  <input value={formState.managementUrl} onChange={event => updateFormField('managementUrl', event.target.value)} />
+                  {formErrors.managementUrl ? <span className="field-error">{formErrors.managementUrl}</span> : null}
+                </label>
+                <label>
+                  URL de résiliation
+                  <input value={formState.cancellationUrl} onChange={event => updateFormField('cancellationUrl', event.target.value)} />
+                  {formErrors.cancellationUrl ? <span className="field-error">{formErrors.cancellationUrl}</span> : null}
+                </label>
+              </div>
+
+              <label>
+                Instructions de résiliation
+                <textarea value={formState.cancellationInstructions} onChange={event => updateFormField('cancellationInstructions', event.target.value)} />
+              </label>
+              <label>
+                Notes
+                <textarea value={formState.notes} onChange={event => updateFormField('notes', event.target.value)} />
+              </label>
+
+              <div className="button-row">
+                <button type="submit">
+                  {editingSubscriptionId ? 'Enregistrer les modifications' : 'Créer'}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    setEditingSubscriptionId(null)
+                    setFormErrors({})
+                    setFormState(EMPTY_FORM)
+                  }}
+                >
+                  Réinitialiser le formulaire
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section className="control-card" aria-labelledby="incomplete-title">
+            <h2 id="incomplete-title">À compléter</h2>
+            {incompleteSubscriptions.length === 0 ? (
+              <p>Tous les abonnements visibles sont complets.</p>
+            ) : (
+              <ul className="incomplete-list">
+                {incompleteSubscriptions.map(subscription => {
+                  const completion = computeSubscriptionCompletion(subscription)
+                  return (
+                    <li key={subscription.id}>
+                      <strong>{subscription.name}</strong>: {completion.label}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            {summary.excludedCurrencySubscriptionCount > 0 ? (
+              <details className="exclusion-details">
+                <summary>{summary.excludedCurrencySubscriptionCount} abonnement(s) exclu(s) des totaux consolidés</summary>
+                <ul className="incomplete-list">
+                  {summary.excludedSubscriptions.map(ex => {
+                    const sub = subscriptions.find(s => s.id === ex.id)
+                    return (
+                      <li key={ex.id}>
+                        <strong>{sub?.name ?? ex.id}</strong>: {ex.reason}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </details>
+            ) : null}
+          </section>
+
+          {subscriptions.length === 0 ? (
+            <section className="empty-state" aria-labelledby="empty-state-title">
+              <span className="empty-state-icon" aria-hidden="true">
+                <span />
+              </span>
+              <div>
+                <h2 id="empty-state-title">Aucun abonnement enregistré</h2>
+                <p>Utilisez le formulaire ci-dessus pour créer une première fiche.</p>
+              </div>
+            </section>
+          ) : null}
+        </main>
+      )}
     </div>
   )
 }

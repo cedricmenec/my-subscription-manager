@@ -4,6 +4,9 @@ import App from './App'
 
 describe('App', () => {
   it('affiche la vue initiale des abonnements en français', () => {
+    // Réinitialiser le hash pour que la page d'accueil soit affichée
+    window.location.hash = ''
+
     render(<App />)
 
     expect(
@@ -31,10 +34,23 @@ describe('App', () => {
       screen.getByRole('button', { name: 'Synchroniser maintenant' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Diagnostic' }),
+      screen.getByRole('heading', { level: 2, name: 'À compléter' }),
+    ).toBeInTheDocument()
+  })
+
+  it('affiche les boutons de navigation dans la barre supérieure', () => {
+    window.location.hash = ''
+
+    render(<App />)
+
+    expect(
+      screen.getByRole('button', { name: 'Abonnements' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { level: 2, name: 'À compléter' }),
+      screen.getByRole('button', { name: 'Configuration' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Ouvrir le diagnostic' }),
     ).toBeInTheDocument()
   })
 })

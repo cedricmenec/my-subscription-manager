@@ -548,6 +548,192 @@ textarea:focus-visible {
   }
 }
 
+/* ── TopBar enhancements ── */
+
+.topbar-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.topbar-nav-link {
+  height: 36px;
+  border-radius: 6px;
+  background: transparent;
+  color: #52605d;
+  padding: 0 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.topbar-nav-link:hover {
+  background: #edf4f2;
+  color: #173f3a;
+  filter: none;
+}
+
+.topbar-nav-link-active,
+.topbar-nav-link-active:hover {
+  background: #173f3a;
+  color: #ffffff;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-icon-button {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  color: #52605d;
+  padding: 0;
+}
+
+.topbar-icon-button:hover {
+  background: #edf4f2;
+  color: #173f3a;
+  filter: none;
+}
+
+/* ── Diagnostic Dialog ── */
+
+.diagnostic-dialog {
+  width: min(100% - 32px, 520px);
+  border: 1px solid #d9dfdd;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 0;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.diagnostic-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.diagnostic-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #d9dfdd;
+  padding: 16px 20px;
+}
+
+.diagnostic-dialog-header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.diagnostic-dialog-close {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  color: #52605d;
+  padding: 0;
+}
+
+.diagnostic-dialog-close:hover {
+  background: #f2f2f2;
+  color: #17211f;
+  filter: none;
+}
+
+.diagnostic-dialog-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+  padding: 20px;
+}
+
+.diagnostic-dialog-grid div {
+  border-bottom: 1px dashed #d9dfdd;
+  padding-bottom: 6px;
+}
+
+.diagnostic-dialog-grid dt {
+  margin-bottom: 4px;
+  color: #52605d;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.diagnostic-dialog-grid dd {
+  margin: 0;
+  color: #17211f;
+  font-size: 0.9rem;
+}
+
+.diagnostic-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid #d9dfdd;
+  padding: 12px 20px;
+}
+
+/* ── Settings Page ── */
+
+.settings-page {
+  max-width: 640px;
+}
+
+.settings-page .control-card {
+  margin-bottom: 20px;
+}
+
+.settings-list {
+  margin: 0 0 12px;
+  padding-left: 0;
+  list-style: none;
+}
+
+.settings-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px dashed #d9dfdd;
+  padding: 10px 0;
+}
+
+.settings-list-item > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-rate-value {
+  color: #52605d;
+  font-size: 0.85rem;
+}
+
+.settings-hint {
+  margin-top: 8px !important;
+  color: #52605d;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 640px) {
+  .diagnostic-dialog-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-list-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 .exclusion-badge,
 .conversion-badge {
   display: inline-flex;
