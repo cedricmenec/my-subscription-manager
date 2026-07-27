@@ -252,4 +252,76 @@ describe('taux de conversion', () => {
     expect(summary.includedSubscriptionCount).toBe(2)
     expect(summary.excludedCurrencySubscriptionCount).toBe(0)
   })
+
+  it('convertit les paiements projetés USD dans les décaissements 30/90 jours', () => {
+    const subscriptions = [
+      {
+        id: 'sbs-usd',
+        name: 'Netflix USD',
+        status: 'ACTIVE' as const,
+        renewalMode: 'AUTOMATIC' as const,
+        currentPriceMinor: 1500,
+        currency: 'USD',
+        billingIntervalUnit: 'MONTH' as const,
+        billingIntervalCount: 1,
+        nextChargeDate: '2026-08-15',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        schemaVersion: 3,
+      },
+    ]
+
+    const payments = [
+      {
+        id: 'pmt-usd-1',
+        subscriptionId: 'sbs-usd',
+        scheduledDate: '2026-08-15',
+        status: 'PROJECTED' as const,
+        amount: { amountMinor: 1500, currency: 'USD' },
+        source: 'GENERATED' as const,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        schemaVersion: 3,
+      },
+    ]
+
+    const summary = buildFinancialSummary({
+      subscriptions,
+      payments,
+      baseCurrency: 'EUR',
+      exchangeRates: { USD: 0.92 },
+      referenceDate: '2026-07-26',
+    })
+
+    // 1500 USD * 0.92 = 1380 EUR
+    expect(summary.projected30Minor).toBe(1380)
+    expect(summary.projected90Minor).toBe(1380)
+    expect(summary.monthlyEquivalentMinor).toBe(1380)
+  })
+
+  it('ignore les paiements USD sans taux de conversion dans les décaissements', () => {
+    const payments = [
+      {
+        id: 'pmt-usd-2',
+        subscriptionId: 'sbs-usd',
+        scheduledDate: '2026-08-15',
+        status: 'PROJECTED' as const,
+        amount: { amountMinor: 1500, currency: 'USD' },
+        source: 'GENERATED' as const,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        schemaVersion: 3,
+      },
+    ]
+
+    const summary = buildFinancialSummary({
+      subscriptions: [],
+      payments,
+      baseCurrency: 'EUR',
+      referenceDate: '2026-07-26',
+    })
+
+    expect(summary.projected30Minor).toBe(0)
+    expect(summary.projected90Minor).toBe(0)
+  })
 })

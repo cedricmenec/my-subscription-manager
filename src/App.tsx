@@ -535,6 +535,7 @@ function App() {
         })
       }
       setOperationStatus('enregistre-localement')
+      void refreshFinance()
     } catch (error) {
       setFeedback(
         `Impossible de sauvegarder le taux: ${error instanceof Error ? error.message : 'erreur inconnue'}`,
@@ -558,6 +559,7 @@ function App() {
         })
       }
       setOperationStatus('enregistre-localement')
+      void refreshFinance()
     } catch (error) {
       setFeedback(
         `Impossible de supprimer le taux: ${error instanceof Error ? error.message : 'erreur inconnue'}`,

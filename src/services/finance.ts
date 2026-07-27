@@ -207,11 +207,12 @@ export function buildFinancialSummary(options: {
     baseCurrency: options.baseCurrency,
     monthlyEquivalentMinor,
     annualEquivalentMinor,
-    projected30Minor: sumPaymentsInWindow(options.payments, options.baseCurrency, referenceDate, day30),
-    projected90Minor: sumPaymentsInWindow(options.payments, options.baseCurrency, referenceDate, day90),
+    projected30Minor: sumPaymentsInWindow(options.payments, options.baseCurrency, options.exchangeRates, referenceDate, day30),
+    projected90Minor: sumPaymentsInWindow(options.payments, options.baseCurrency, options.exchangeRates, referenceDate, day90),
     expensesYearToDateMinor: sumExpensesYearToDate(
       options.payments,
       options.baseCurrency,
+      options.exchangeRates,
       yearStart,
       referenceDate,
     ),
@@ -319,12 +320,13 @@ function intervalToMonths(unit: IntervalUnit, count: number): number | undefined
 
 function sumPaymentsInWindow(
   payments: Payment[],
-  currency: string,
+  baseCurrency: string,
+  exchangeRates: Record<string, number> | undefined,
   startDate: string,
   endDate: string,
 ): number {
   return payments.reduce((total, payment) => {
-    if (payment.amount.currency !== currency || payment.status !== 'PROJECTED') {
+    if (payment.status !== 'PROJECTED') {
       return total
     }
 
@@ -336,29 +338,44 @@ function sumPaymentsInWindow(
       return total
     }
 
-    return total + payment.amount.amountMinor
+    const paymentCurrency = payment.amount.currency
+    if (paymentCurrency === baseCurrency) {
+      return total + payment.amount.amountMinor
+    }
+
+    const rate = exchangeRates?.[paymentCurrency]
+    if (rate) {
+      return total + Math.round(payment.amount.amountMinor * rate)
+    }
+
+    return total
   }, 0)
 }
 
 function sumExpensesYearToDate(
   payments: Payment[],
-  currency: string,
+  baseCurrency: string,
+  exchangeRates: Record<string, number> | undefined,
   startDate: string,
   endDate: string,
 ): number {
   return payments.reduce((total, payment) => {
     const effectiveDate = payment.paidDate ?? payment.scheduledDate
 
-    if (payment.amount.currency !== currency) {
-      return total
-    }
-
     if (compareCivilDates(effectiveDate, startDate) < 0 || compareCivilDates(effectiveDate, endDate) > 0) {
       return total
     }
 
     if (payment.status === 'ASSUMED_PAID' || payment.status === 'CONFIRMED_PAID') {
-      return total + payment.amount.amountMinor
+      const paymentCurrency = payment.amount.currency
+      if (paymentCurrency === baseCurrency) {
+        return total + payment.amount.amountMinor
+      }
+
+      const rate = exchangeRates?.[paymentCurrency]
+      if (rate) {
+        return total + Math.round(payment.amount.amountMinor * rate)
+      }
     }
 
     if (payment.status === 'REFUNDED') {
