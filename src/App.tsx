@@ -48,20 +48,10 @@ type OperationStatus =
 
 interface FinancialSummaryState {
   baseCurrency: string
-  /** @deprecated Utiliser monthlyEquivalent */
-  monthlyEquivalentMinor: number
   monthlyEquivalent: number
-  /** @deprecated Utiliser annualEquivalent */
-  annualEquivalentMinor: number
   annualEquivalent: number
-  /** @deprecated Utiliser projected30 */
-  projected30Minor: number
   projected30: number
-  /** @deprecated Utiliser projected90 */
-  projected90Minor: number
   projected90: number
-  /** @deprecated Utiliser expensesYearToDate */
-  expensesYearToDateMinor: number
   expensesYearToDate: number
   includedSubscriptionCount: number
   excludedCurrencySubscriptionCount: number
@@ -136,15 +126,10 @@ const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
 
 const EMPTY_SUMMARY: FinancialSummaryState = {
   baseCurrency: 'EUR',
-  monthlyEquivalentMinor: 0,
   monthlyEquivalent: 0,
-  annualEquivalentMinor: 0,
   annualEquivalent: 0,
-  projected30Minor: 0,
   projected30: 0,
-  projected90Minor: 0,
   projected90: 0,
-  expensesYearToDateMinor: 0,
   expensesYearToDate: 0,
   includedSubscriptionCount: 0,
   excludedCurrencySubscriptionCount: 0,
@@ -246,9 +231,7 @@ function formatInterval(count?: number, unit?: IntervalUnit): string {
 function toFormState(subscription: Subscription): SubscriptionFormState {
   const price = typeof subscription.currentPrice === 'number'
     ? String(subscription.currentPrice)
-    : typeof subscription.currentPriceMinor === 'number'
-      ? String(subscription.currentPriceMinor / 100)
-      : ''
+    : ''
 
   return {
     name: subscription.name,
@@ -960,10 +943,6 @@ function App() {
                         <p>
                           Tarif courant: {formatMoney(subscription.currentPrice, subscription.currency)}
                         </p>
-                      ) : typeof subscription.currentPriceMinor === 'number' && subscription.currency ? (
-                        <p>
-                          Tarif courant: {formatMoney(subscription.currentPriceMinor / 100, subscription.currency)}
-                        </p>
                       ) : null}
                       {subscription.notes ? <p>Notes: {subscription.notes}</p> : null}
                     </div>
@@ -1001,7 +980,7 @@ function App() {
                       {PAYMENT_STATUS_LABELS[payment.status]}
                     </p>
                     <h3>{payment.scheduledDate}</h3>
-                    <p>{formatMoney(payment.amount.amount ?? payment.amount.amountMinor / 100, payment.amount.currency)}</p>
+                    <p>{formatMoney(payment.amount.amount, payment.amount.currency)}</p>
                     <p>Abonnement: {payment.subscriptionId}</p>
                   </div>
                   <div className="button-row">

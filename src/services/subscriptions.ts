@@ -79,7 +79,7 @@ export function computeSubscriptionCompletion(
 
   if (!subscription.name.trim()) missingFields.push('name')
   if (!subscription.status) missingFields.push('status')
-  if (typeof subscription.currentPrice !== 'number' && typeof subscription.currentPriceMinor !== 'number') missingFields.push('price')
+  if (typeof subscription.currentPrice !== 'number') missingFields.push('price')
   if (!subscription.currency) missingFields.push('currency')
   if (!subscription.billingIntervalUnit || !subscription.billingIntervalCount) {
     missingFields.push('billingInterval')
@@ -124,7 +124,7 @@ export async function createCategory(
     sortOrder: now.getTime(),
     createdAt: now,
     updatedAt: now,
-    schemaVersion: 4,
+    schemaVersion: 5,
   }
 
   await database.categories.put(category)
@@ -139,7 +139,6 @@ export async function createSubscription(
     name: input.name,
     status: input.status,
     renewalMode: input.renewalMode,
-    currentPriceMinor: input.currentPriceMinor,
     currentPrice: input.currentPrice,
     billingIntervalUnit: input.billingIntervalUnit,
     billingIntervalCount: input.billingIntervalCount,
@@ -159,10 +158,6 @@ export async function createSubscription(
   }
 
   const now = new Date()
-  const currentPrice = input.currentPrice
-  const currentPriceMinor = typeof currentPrice === 'number'
-    ? Math.round(currentPrice * 100)
-    : input.currentPriceMinor
 
   const subscription: Subscription = {
     id: createEntityId('sbs'),
@@ -172,8 +167,7 @@ export async function createSubscription(
     categoryId: cleanOptional(input.categoryId),
     status: input.status,
     renewalMode: input.renewalMode,
-    currentPriceMinor,
-    currentPrice: typeof currentPrice === 'number' ? currentPrice : undefined,
+    currentPrice: input.currentPrice,
     currency: cleanOptional(input.currency),
     billingIntervalUnit: input.billingIntervalUnit,
     billingIntervalCount: normalizePositiveInteger(input.billingIntervalCount),
@@ -191,7 +185,7 @@ export async function createSubscription(
     notes: cleanOptional(input.notes),
     createdAt: now,
     updatedAt: now,
-    schemaVersion: 4,
+    schemaVersion: 5,
   }
 
   await database.transaction('rw', database.subscriptions, async () => {
@@ -227,12 +221,9 @@ export async function updateSubscription(
     planName: cleanOptional(patch.planName) ?? current.planName,
     categoryId: cleanOptional(patch.categoryId),
     currency: cleanOptional(patch.currency),
-    currentPriceMinor: typeof patch.currentPrice === 'number'
-      ? Math.round(patch.currentPrice * 100)
-      : (patch.currentPriceMinor ?? current.currentPriceMinor),
     currentPrice: typeof patch.currentPrice === 'number'
       ? patch.currentPrice
-      : (patch.currentPriceMinor !== undefined ? patch.currentPriceMinor / 100 : current.currentPrice),
+      : current.currentPrice,
     billingIntervalUnit: patch.billingIntervalUnit ?? current.billingIntervalUnit,
     billingIntervalCount:
       normalizePositiveInteger(patch.billingIntervalCount) ?? current.billingIntervalCount,
@@ -251,14 +242,13 @@ export async function updateSubscription(
     cancellationInstructions: cleanOptional(patch.cancellationInstructions),
     notes: cleanOptional(patch.notes),
     updatedAt: new Date(),
-    schemaVersion: 4,
+    schemaVersion: 5,
   }
 
   const validation = validateSubscriptionInput({
     name: merged.name,
     status: merged.status,
     renewalMode: merged.renewalMode,
-    currentPriceMinor: merged.currentPriceMinor,
     currentPrice: merged.currentPrice,
     billingIntervalUnit: merged.billingIntervalUnit,
     billingIntervalCount: merged.billingIntervalCount,
@@ -301,25 +291,13 @@ export async function updateSubscription(
       notes: merged.notes,
       status: merged.status,
       renewalMode: merged.renewalMode,
-      currentPriceMinor: merged.currentPriceMinor,
       currentPrice: merged.currentPrice,
       updatedAt: merged.updatedAt,
-      schemaVersion: 4,
+      schemaVersion: 5,
     })
   })
 
   return merged
-}
-
-export async function archiveSubscription(
-  id: string,
-  database: SubscriptionDatabase = db,
-): Promise<void> {
-  await database.subscriptions.update(id, {
-    archivedAt: new Date(),
-    updatedAt: new Date(),
-    schemaVersion: 4,
-  })
 }
 
 function sortSubscriptions(
@@ -336,6 +314,17 @@ function sortSubscriptions(
     const leftDate = left.nextChargeDate ?? '9999-12-31'
     const rightDate = right.nextChargeDate ?? '9999-12-31'
     return leftDate.localeCompare(rightDate)
+  })
+}
+
+export async function archiveSubscription(
+  id: string,
+  database: SubscriptionDatabase = db,
+): Promise<void> {
+  await database.subscriptions.update(id, {
+    archivedAt: new Date(),
+    updatedAt: new Date(),
+    schemaVersion: 5,
   })
 }
 

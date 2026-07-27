@@ -23,7 +23,7 @@ describe('SubscriptionDatabase', () => {
       cloudUrl: 'https://invalid.dexie.cloud',
     })
 
-    expect(testDb.verno).toBe(4)
+    expect(testDb.verno).toBe(5)
     expect(testDb.tables.map(table => table.name)).toEqual(
       expect.arrayContaining([
         'subscriptions',
@@ -84,7 +84,7 @@ describe('SubscriptionDatabase', () => {
     expect(migrated?.billingIntervalCount).toBe(1)
     expect(migrated?.renewalIntervalUnit).toBe('MONTH')
     expect(migrated?.renewalIntervalCount).toBe(1)
-    expect(migrated?.schemaVersion).toBe(4)
+    expect(migrated?.schemaVersion).toBe(5)
 
     upgradedDb.close()
   })
@@ -140,12 +140,76 @@ describe('SubscriptionDatabase', () => {
 
     const migratedSub = await upgradedDb.subscriptions.get('sbs-v4-test-1')
     expect(migratedSub?.currentPrice).toBe(15)
-    expect(migratedSub?.currentPriceMinor).toBe(1500)
-    expect(migratedSub?.schemaVersion).toBe(4)
+    expect(migratedSub?.schemaVersion).toBe(5)
 
     const migratedPayment = await upgradedDb.payments.get('pym-v4-test-1')
     expect(migratedPayment?.amount.amount).toBe(15)
-    expect(migratedPayment?.amount.amountMinor).toBe(1500)
+    expect(migratedPayment?.schemaVersion).toBe(5)
+
+    upgradedDb.close()
+  })
+
+  it('supprime les champs legacy en v5 : currentPriceMinor, amountMinor, billingInterval', async () => {
+    const dbName = `migration-v5-db-${crypto.randomUUID()}`
+    createdDbNames.push(dbName)
+
+    class V4Db extends Dexie {
+      constructor(name: string) {
+        super(name)
+        this.version(4).stores({
+          subscriptions: 'id, status, categoryId, renewalMode, billingIntervalUnit, nextChargeDate, updatedAt, archivedAt, deletedAt',
+          categories: 'id, &name, sortOrder, updatedAt',
+          payments: 'id, subscriptionId, scheduledDate, paidDate, status, [subscriptionId+scheduledDate], updatedAt, deletedAt',
+          settings: 'id, &key, updatedAt',
+          localSettings: '&key, updatedAt',
+          diagnosticLogs: '++id, timestamp, category',
+        })
+      }
+    }
+
+    const v4Db = new V4Db(dbName)
+    await v4Db.open()
+    await v4Db.table('subscriptions').put({
+      id: 'sbs-v5-test-1',
+      name: 'Test v5',
+      status: 'ACTIVE',
+      renewalMode: 'AUTOMATIC',
+      currentPriceMinor: 1500,
+      currentPrice: 15.00,
+      billingInterval: 'MONTHLY',
+      currency: 'EUR',
+      billingIntervalUnit: 'MONTH',
+      billingIntervalCount: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      schemaVersion: 4,
+    })
+    await v4Db.table('payments').put({
+      id: 'pym-v5-test-1',
+      subscriptionId: 'sbs-v5-test-1',
+      scheduledDate: '2026-08-01',
+      status: 'PROJECTED',
+      amount: { amountMinor: 1500, amount: 15.00, currency: 'EUR' },
+      source: 'GENERATED',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      schemaVersion: 4,
+    })
+    v4Db.close()
+
+    const upgradedDb = new SubscriptionDatabase({ name: dbName, skipCloud: true })
+    await upgradedDb.open()
+
+    const migratedSub = await upgradedDb.subscriptions.get('sbs-v5-test-1')
+    expect(migratedSub?.currentPrice).toBe(15.00)
+    expect((migratedSub as unknown as Record<string, unknown>).currentPriceMinor).toBeUndefined()
+    expect((migratedSub as unknown as Record<string, unknown>).billingInterval).toBeUndefined()
+    expect(migratedSub?.schemaVersion).toBe(5)
+
+    const migratedPayment = await upgradedDb.payments.get('pym-v5-test-1')
+    expect(migratedPayment?.amount.amount).toBe(15.00)
+    expect((migratedPayment?.amount as unknown as Record<string, unknown>).amountMinor).toBeUndefined()
+    expect(migratedPayment?.schemaVersion).toBe(5)
 
     upgradedDb.close()
   })

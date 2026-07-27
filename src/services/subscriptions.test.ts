@@ -64,7 +64,7 @@ describe('subscriptions service', () => {
       renewalMode: 'AUTOMATIC',
       createdAt: new Date(),
       updatedAt: new Date(),
-      schemaVersion: 3,
+      schemaVersion: 5,
     })
 
     expect(completion.isComplete).toBe(false)

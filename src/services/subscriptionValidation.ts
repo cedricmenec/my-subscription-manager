@@ -27,7 +27,6 @@ export interface SubscriptionFormInput {
   name: string
   status: SubscriptionStatus
   renewalMode: RenewalMode
-  currentPriceMinor?: number
   currentPrice?: number
   billingIntervalUnit?: IntervalUnit
   billingIntervalCount?: number
@@ -104,10 +103,6 @@ export function validateSubscriptionInput(
 
   if (!VALID_RENEWAL_MODES.includes(input.renewalMode)) {
     errors.renewalMode = 'Le mode de renouvellement est invalide.'
-  }
-
-  if (typeof input.currentPriceMinor === 'number' && input.currentPriceMinor < 0) {
-    errors.currentPriceMinor = 'Le prix ne peut pas être négatif.'
   }
 
   validateIntervalPair(

@@ -6,7 +6,7 @@ Définir les garanties métier et techniques du Lot 3 pour Abos: persistance loc
 
 ### Requirement: Paiements synchronisés et statuts financiers
 
-L'application SHALL persister une table synchronisée `payments` avec identifiants globaux, montants en unités de devise, dates civiles et statuts `PROJECTED`, `ASSUMED_PAID`, `CONFIRMED_PAID`, `SKIPPED` et `REFUNDED`, conformément à la section 13.4, RG-FX-001, RG-DAT-006 et AC-016.
+L'application SHALL persister une table synchronisée `payments` avec identifiants globaux, montants en unités de devise, dates civiles et statuts `PROJECTED`, `ASSUMED_PAID`, `CONFIRMED_PAID`, `SKIPPED` et `REFUNDED`, conformément à la section 13.4, RG-FX-001, RG-DAT-006 et AC-016. Le champ `amountMinor` du type `Money` a été supprimé.
 
 #### Scenario: Création d'un paiement projeté
 
@@ -39,7 +39,7 @@ L'application SHALL calculer localement les prochaines échéances financières 
 
 ### Requirement: Calcul des indicateurs financiers du Lot 3
 
-L'application SHALL calculer le coût mensuel équivalent, le coût annuel équivalent, les décaissements prévus à 30 et 90 jours et les dépenses sur période à partir des abonnements et paiements, conformément à la section 9.2, OBJ-MET-001 et AC-010. L'application SHALL également appliquer les taux de conversion configurés pour inclure les abonnements en devise étrangère dans les totaux consolidés, et SHALL exposer la liste des abonnements exclus avec leur motif d'exclusion. Tous les montants financiers sont exprimés en unités de devise (ex: 15.00 pour 15 €).
+L'application SHALL calculer le coût mensuel équivalent, le coût annuel équivalent, les décaissements prévus à 30 et 90 jours et les dépenses sur période à partir des abonnements et paiements, conformément à la section 9.2, OBJ-MET-001 et AC-010. L'application SHALL également appliquer les taux de conversion configurés pour inclure les abonnements en devise étrangère dans les totaux consolidés, et SHALL exposer la liste des abonnements exclus avec leur motif d'exclusion. Tous les montants financiers sont exprimés en unités de devise. Les propriétés `*Minor` de `FinancialSummary` sont supprimées.
 
 #### Scenario: Coût équivalent d'un abonnement annuel en unités
 
@@ -106,18 +106,17 @@ Le premier incrément de cette capacité MUST limiter ses calculs aux cas déter
 - **THEN** l'application applique la conversion et inclut le montant dans les totaux
 - **AND** le calcul reste déterministe et basé sur les données locales
 
-### Requirement: Champ amount en unités de devise
+### Requirement: Champ amount en unités de devise (phase 2)
 
-Le type `Money` SHALL exposer un champ `amount` (number) représentant le montant en unités de la devise (ex: 15.00 pour 15 €). Le champ `amountMinor` est conservé comme legacy et maintenu en écriture pour rétrocompatibilité.
+Le type `Money` SHALL exposer un champ `amount` (number) représentant le montant en unités de la devise (ex: 15.00 pour 15 €). Le champ `amountMinor` a été supprimé.
 
 #### Scenario: Paiement avec montant en unités
 
 - **WHEN** un paiement est créé ou matérialisé
 - **THEN** `amount.amount` est stocké en unités de devise (ex: 15.00)
-- **AND** `amount.amountMinor` est automatiquement mis à jour à `Math.round(amount * 100)`
 
 #### Scenario: Migration des paiements existants
 
 - **WHEN** la base existante contient des `amountMinor` en centimes
 - **THEN** la migration Dexie v4 calcule `amount = amountMinor / 100`
-- **AND** le champ `amountMinor` reste inchangé
+- **AND** la migration Dexie v5 supprime le champ `amountMinor`

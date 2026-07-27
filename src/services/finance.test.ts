@@ -20,14 +20,13 @@ describe('finance helpers', () => {
       name: 'Service annuel',
       status: 'ACTIVE' as const,
       renewalMode: 'AUTOMATIC' as const,
-      currentPriceMinor: 12000,
       currentPrice: 120.00,
       currency: 'EUR',
       billingIntervalUnit: 'YEAR' as const,
       billingIntervalCount: 1,
       createdAt: new Date(),
       updatedAt: new Date(),
-      schemaVersion: 3,
+      schemaVersion: 5,
     }
 
     expect(computeEquivalentMonthlyCost(subscription)).toBe(10)
@@ -40,7 +39,6 @@ describe('finance helpers', () => {
       name: 'Pause mensuelle',
       status: 'PAUSED' as const,
       renewalMode: 'AUTOMATIC' as const,
-      currentPriceMinor: 1500,
       currentPrice: 15.00,
       currency: 'EUR',
       billingIntervalUnit: 'MONTH' as const,
@@ -50,7 +48,7 @@ describe('finance helpers', () => {
       serviceEndDate: '2026-05-01',
       createdAt: new Date(),
       updatedAt: new Date(),
-      schemaVersion: 3,
+      schemaVersion: 5,
     }
 
     const projected = projectSubscriptionPayments(subscription, '2026-02-01', '2026-06-30')
@@ -65,14 +63,13 @@ describe('finance helpers', () => {
         name: 'Mensuel',
         status: 'ACTIVE' as const,
         renewalMode: 'AUTOMATIC' as const,
-        currentPriceMinor: 1000,
         currentPrice: 10.00,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH' as const,
         billingIntervalCount: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
-        schemaVersion: 3,
+        schemaVersion: 5,
       },
     ]
 
@@ -82,11 +79,11 @@ describe('finance helpers', () => {
         subscriptionId: 'sbs-3',
         scheduledDate: '2026-07-30',
         status: 'PROJECTED' as const,
-        amount: { amountMinor: 1000, amount: 10.00, currency: 'EUR' },
+        amount: { amount: 10.00, currency: 'EUR' },
         source: 'GENERATED' as const,
         createdAt: new Date(),
         updatedAt: new Date(),
-        schemaVersion: 3,
+        schemaVersion: 5,
       },
       {
         id: 'pmt-2',
@@ -94,11 +91,11 @@ describe('finance helpers', () => {
         scheduledDate: '2026-07-01',
         paidDate: '2026-07-01',
         status: 'CONFIRMED_PAID' as const,
-        amount: { amountMinor: 1000, amount: 10.00, currency: 'EUR' },
+        amount: { amount: 10.00, currency: 'EUR' },
         source: 'MANUAL' as const,
         createdAt: new Date(),
         updatedAt: new Date(),
-        schemaVersion: 3,
+        schemaVersion: 5,
       },
     ]
 
@@ -155,14 +152,13 @@ describe('taux de conversion', () => {
         name: 'Service USD',
         status: 'ACTIVE' as const,
         renewalMode: 'AUTOMATIC' as const,
-        currentPriceMinor: 1000,
         currentPrice: 10.00,
         currency: 'USD',
         billingIntervalUnit: 'MONTH' as const,
         billingIntervalCount: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
-        schemaVersion: 3,
+        schemaVersion: 5,
       },
     ]
 
@@ -188,14 +184,13 @@ describe('taux de conversion', () => {
         name: 'Service USD',
         status: 'ACTIVE' as const,
         renewalMode: 'AUTOMATIC' as const,
-        currentPriceMinor: 1000,
         currentPrice: 10.00,
         currency: 'USD',
         billingIntervalUnit: 'MONTH' as const,
         billingIntervalCount: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
-        schemaVersion: 3,
+        schemaVersion: 5,
       },
     ]
 
@@ -221,28 +216,26 @@ describe('taux de conversion', () => {
         name: 'Mensuel EUR',
         status: 'ACTIVE' as const,
         renewalMode: 'AUTOMATIC' as const,
-        currentPriceMinor: 1000,
         currentPrice: 10.00,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH' as const,
         billingIntervalCount: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
-        schemaVersion: 3,
+        schemaVersion: 5,
       },
       {
         id: 'sbs-usd',
         name: 'Mensuel USD',
         status: 'ACTIVE' as const,
         renewalMode: 'AUTOMATIC' as const,
-        currentPriceMinor: 2000,
         currentPrice: 20.00,
         currency: 'USD',
         billingIntervalUnit: 'MONTH' as const,
         billingIntervalCount: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
-        schemaVersion: 3,
+        schemaVersion: 5,
       },
     ]
 
@@ -267,7 +260,6 @@ describe('taux de conversion', () => {
         name: 'Netflix USD',
         status: 'ACTIVE' as const,
         renewalMode: 'AUTOMATIC' as const,
-        currentPriceMinor: 1500,
         currentPrice: 15.00,
         currency: 'USD',
         billingIntervalUnit: 'MONTH' as const,
@@ -275,7 +267,7 @@ describe('taux de conversion', () => {
         nextChargeDate: '2026-08-15',
         createdAt: new Date(),
         updatedAt: new Date(),
-        schemaVersion: 3,
+        schemaVersion: 5,
       },
     ]
 
@@ -285,11 +277,11 @@ describe('taux de conversion', () => {
         subscriptionId: 'sbs-usd',
         scheduledDate: '2026-08-15',
         status: 'PROJECTED' as const,
-        amount: { amountMinor: 1500, amount: 15.00, currency: 'USD' },
+        amount: { amount: 15.00, currency: 'USD' },
         source: 'GENERATED' as const,
         createdAt: new Date(),
         updatedAt: new Date(),
-        schemaVersion: 3,
+        schemaVersion: 5,
       },
     ]
 
@@ -314,11 +306,11 @@ describe('taux de conversion', () => {
         subscriptionId: 'sbs-usd',
         scheduledDate: '2026-08-15',
         status: 'PROJECTED' as const,
-        amount: { amountMinor: 1500, amount: 15.00, currency: 'USD' },
+        amount: { amount: 15.00, currency: 'USD' },
         source: 'GENERATED' as const,
         createdAt: new Date(),
         updatedAt: new Date(),
-        schemaVersion: 3,
+        schemaVersion: 5,
       },
     ]
 

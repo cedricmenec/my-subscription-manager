@@ -13,32 +13,11 @@ import {
 } from './civilDate'
 import { isValidCivilDate } from './subscriptionValidation'
 
-/**
- * Résout le prix en unités de devise depuis currentPrice (prioritaire)
- * ou currentPriceMinor / 100 (fallback legacy).
- */
-export function resolvePrice(subscription: Subscription): number | undefined {
-  if (typeof subscription.currentPrice === 'number') return subscription.currentPrice
-  if (typeof subscription.currentPriceMinor === 'number') return subscription.currentPriceMinor / 100
-  return undefined
-}
-
-/**
- * Résout le montant en unités de devise depuis amount (prioritaire)
- * ou amountMinor / 100 (fallback legacy).
- */
-export function resolveAmount(money: { amount?: number; amountMinor?: number }): number | undefined {
-  if (typeof money.amount === 'number') return money.amount
-  if (typeof money.amountMinor === 'number') return money.amountMinor / 100
-  return undefined
-}
-
 export interface ProjectedPaymentDraft {
   subscriptionId: string
   scheduledDate: string
   status: PaymentStatus
   amount: {
-    amountMinor: number
     amount: number
     currency: string
   }
@@ -51,20 +30,10 @@ export interface ExcludedSubscriptionInfo {
 
 export interface FinancialSummary {
   baseCurrency: string
-  /** @deprecated Utiliser monthlyEquivalent */
-  monthlyEquivalentMinor: number
   monthlyEquivalent: number
-  /** @deprecated Utiliser annualEquivalent */
-  annualEquivalentMinor: number
   annualEquivalent: number
-  /** @deprecated Utiliser projected30 */
-  projected30Minor: number
   projected30: number
-  /** @deprecated Utiliser projected90 */
-  projected90Minor: number
   projected90: number
-  /** @deprecated Utiliser expensesYearToDate */
-  expensesYearToDateMinor: number
   expensesYearToDate: number
   includedSubscriptionCount: number
   excludedCurrencySubscriptionCount: number
@@ -99,7 +68,7 @@ export function validateExchangeRate(currency: string, rate: number): ExchangeRa
 
 export function computeEquivalentMonthlyCost(subscription: Subscription): number | undefined {
   const interval = resolveBillingInterval(subscription)
-  const price = resolvePrice(subscription)
+  const price = subscription.currentPrice
 
   if (typeof price !== 'number' || !interval) {
     return undefined
@@ -133,7 +102,7 @@ export function projectSubscriptionPayments(
   const projected: ProjectedPaymentDraft[] = []
   const stepUnit = interval.unit
   const stepCount = interval.count
-  const price = resolvePrice(subscription)
+  const price = subscription.currentPrice
   const currency = subscription.currency as string
   let candidateDate = subscription.nextChargeDate as string
 
@@ -141,7 +110,6 @@ export function projectSubscriptionPayments(
     return []
   }
 
-  const amountMinor = Math.round(price * 100)
   const amount = price
 
   if (subscription.status === 'PAUSED') {
@@ -165,7 +133,6 @@ export function projectSubscriptionPayments(
         scheduledDate: candidateDate,
         status: 'PROJECTED',
         amount: {
-          amountMinor,
           amount,
           currency,
         },
@@ -233,21 +200,10 @@ export function buildFinancialSummary(options: {
 
   return {
     baseCurrency: options.baseCurrency,
-    monthlyEquivalentMinor: Math.round(monthlyEquivalent * 100),
     monthlyEquivalent,
-    annualEquivalentMinor: Math.round(annualEquivalent * 100),
     annualEquivalent,
-    projected30Minor: Math.round(sumPaymentsInWindow(options.payments, options.baseCurrency, options.exchangeRates, referenceDate, day30) * 100),
     projected30: sumPaymentsInWindow(options.payments, options.baseCurrency, options.exchangeRates, referenceDate, day30),
-    projected90Minor: Math.round(sumPaymentsInWindow(options.payments, options.baseCurrency, options.exchangeRates, referenceDate, day90) * 100),
     projected90: sumPaymentsInWindow(options.payments, options.baseCurrency, options.exchangeRates, referenceDate, day90),
-    expensesYearToDateMinor: Math.round(sumExpensesYearToDate(
-      options.payments,
-      options.baseCurrency,
-      options.exchangeRates,
-      yearStart,
-      referenceDate,
-    ) * 100),
     expensesYearToDate: sumExpensesYearToDate(
       options.payments,
       options.baseCurrency,
@@ -278,7 +234,7 @@ function canProjectSubscription(
   }
 
   return Boolean(
-    typeof resolvePrice(subscription) === 'number' &&
+    typeof subscription.currentPrice === 'number' &&
       subscription.currency &&
       subscription.nextChargeDate &&
       isValidCivilDate(subscription.nextChargeDate) &&
@@ -378,7 +334,7 @@ function sumPaymentsInWindow(
     }
 
     const paymentCurrency = payment.amount.currency
-    const amount = resolveAmount(payment.amount) ?? 0
+    const amount = payment.amount.amount
     if (paymentCurrency === baseCurrency) {
       return total + amount
     }
@@ -406,7 +362,7 @@ function sumExpensesYearToDate(
       return total
     }
 
-    const amount = resolveAmount(payment.amount) ?? 0
+    const amount = payment.amount.amount
 
     if (payment.status === 'ASSUMED_PAID' || payment.status === 'CONFIRMED_PAID') {
       const paymentCurrency = payment.amount.currency
