@@ -23,7 +23,7 @@ describe('SubscriptionDatabase', () => {
       cloudUrl: 'https://invalid.dexie.cloud',
     })
 
-    expect(testDb.verno).toBe(5)
+    expect(testDb.verno).toBe(6)
     expect(testDb.tables.map(table => table.name)).toEqual(
       expect.arrayContaining([
         'subscriptions',
@@ -32,6 +32,8 @@ describe('SubscriptionDatabase', () => {
         'settings',
         'localSettings',
         'diagnosticLogs',
+        'importPreview',
+        'drafts',
       ]),
     )
 
@@ -40,7 +42,7 @@ describe('SubscriptionDatabase', () => {
 
     expect(testDb.cloud.options?.requireAuth).toBe(true)
     expect(testDb.cloud.options?.unsyncedTables).toEqual(
-      expect.arrayContaining(['localSettings', 'diagnosticLogs']),
+      expect.arrayContaining(['localSettings', 'diagnosticLogs', 'importPreview', 'drafts']),
     )
 
     testDb.close()
@@ -84,7 +86,7 @@ describe('SubscriptionDatabase', () => {
     expect(migrated?.billingIntervalCount).toBe(1)
     expect(migrated?.renewalIntervalUnit).toBe('MONTH')
     expect(migrated?.renewalIntervalCount).toBe(1)
-    expect(migrated?.schemaVersion).toBe(5)
+    expect(migrated?.schemaVersion).toBe(6)
 
     upgradedDb.close()
   })
@@ -140,11 +142,11 @@ describe('SubscriptionDatabase', () => {
 
     const migratedSub = await upgradedDb.subscriptions.get('sbs-v4-test-1')
     expect(migratedSub?.currentPrice).toBe(15)
-    expect(migratedSub?.schemaVersion).toBe(5)
+    expect(migratedSub?.schemaVersion).toBe(6)
 
     const migratedPayment = await upgradedDb.payments.get('pym-v4-test-1')
     expect(migratedPayment?.amount.amount).toBe(15)
-    expect(migratedPayment?.schemaVersion).toBe(5)
+    expect(migratedPayment?.schemaVersion).toBe(6)
 
     upgradedDb.close()
   })
@@ -204,12 +206,12 @@ describe('SubscriptionDatabase', () => {
     expect(migratedSub?.currentPrice).toBe(15.00)
     expect((migratedSub as unknown as Record<string, unknown>).currentPriceMinor).toBeUndefined()
     expect((migratedSub as unknown as Record<string, unknown>).billingInterval).toBeUndefined()
-    expect(migratedSub?.schemaVersion).toBe(5)
+    expect(migratedSub?.schemaVersion).toBe(6)
 
     const migratedPayment = await upgradedDb.payments.get('pym-v5-test-1')
     expect(migratedPayment?.amount.amount).toBe(15.00)
     expect((migratedPayment?.amount as unknown as Record<string, unknown>).amountMinor).toBeUndefined()
-    expect(migratedPayment?.schemaVersion).toBe(5)
+    expect(migratedPayment?.schemaVersion).toBe(6)
 
     upgradedDb.close()
   })

@@ -1,8 +1,8 @@
 import type { ConnectedIdentity } from '../services/auth'
 
 interface TopBarProps {
-  currentPage: 'subscriptions' | 'settings'
-  onNavigate: (page: 'subscriptions' | 'settings') => void
+  currentPage: 'subscriptions' | 'settings' | 'data'
+  onNavigate: (page: 'subscriptions' | 'settings' | 'data') => void
   onOpenDiagnostic: () => void
   identity: ConnectedIdentity
 }
@@ -34,6 +34,13 @@ export default function TopBar({ currentPage, onNavigate, onOpenDiagnostic, iden
           onClick={() => onNavigate('settings')}
         >
           Configuration
+        </button>
+        <button
+          type="button"
+          className={`topbar-nav-link${currentPage === 'data' ? ' topbar-nav-link-active' : ''}`}
+          onClick={() => onNavigate('data')}
+        >
+          Données
         </button>
       </nav>
       <div className="topbar-actions">

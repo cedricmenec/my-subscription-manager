@@ -42,6 +42,7 @@ import TopBar from './components/TopBar'
 import DiagnosticDialog from './components/DiagnosticDialog'
 import type { DiagnosticInfo } from './components/DiagnosticDialog'
 import SettingsPage from './pages/SettingsPage'
+import DataPage from './pages/DataPage'
 
 type OperationStatus =
   | 'aucune-operation'
@@ -269,9 +270,10 @@ function toFormState(subscription: Subscription): SubscriptionFormState {
 }
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<'subscriptions' | 'settings'>(() => {
+  const [currentPage, setCurrentPage] = useState<'subscriptions' | 'settings' | 'data'>(() => {
     const hash = window.location.hash.slice(1) || '/subscriptions'
     if (hash.startsWith('/settings')) return 'settings'
+    if (hash.startsWith('/data')) return 'data'
     return 'subscriptions'
   })
   const [showDiagnostic, setShowDiagnostic] = useState(false)
@@ -304,12 +306,14 @@ function App() {
   const appSyncStatus = useMemo(() => mapSyncStateToAppStatus(syncState), [syncState])
 
   // Synchronisation hash ↔ état de navigation
-  const navigate = useCallback((page: 'subscriptions' | 'settings') => {
+  const navigate = useCallback((page: 'subscriptions' | 'settings' | 'data') => {
     setCurrentPage(page)
     if (page === 'subscriptions') {
       window.location.hash = '/subscriptions'
-    } else {
+    } else if (page === 'settings') {
       window.location.hash = '/settings'
+    } else {
+      window.location.hash = '/data'
     }
   }, [])
 
@@ -318,6 +322,8 @@ function App() {
       const hash = window.location.hash.slice(1) || '/subscriptions'
       if (hash.startsWith('/settings')) {
         setCurrentPage('settings')
+      } else if (hash.startsWith('/data')) {
+        setCurrentPage('data')
       } else {
         setCurrentPage('subscriptions')
       }
@@ -739,6 +745,16 @@ function App() {
             onEmailChange={setEmail}
             onSaveLocalDraft={handleSaveLocalDraft}
             onPurgeLocalData={handlePurgeLocalData}
+          />
+        </main>
+      ) : currentPage === 'data' ? (
+        <main className="main-content">
+          <DataPage
+            onFeedback={setFeedback}
+            onRefresh={() => {
+              void refreshSubscriptions()
+              void refreshFinance()
+            }}
           />
         </main>
       ) : (

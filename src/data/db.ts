@@ -105,6 +105,41 @@ export interface DiagnosticLog {
   message: string
 }
 
+export interface ImportPreviewRow {
+  id: string
+  rowNumber: number
+  status: 'valid' | 'warning' | 'error'
+  message: string
+  data?: Record<string, unknown>
+}
+
+export interface Draft {
+  id: string
+  entityType: string
+  value: string
+  updatedAt: Date
+}
+
+export interface ImportReport {
+  totalRows: number
+  created: number
+  updated: number
+  warnings: Array<{ row: number; message: string }>
+  errors: Array<{ row: number; message: string }>
+}
+
+export interface SnapshotEnvelope {
+  format: 'abos-snapshot'
+  version: number
+  exportedAt: string
+  data: {
+    subscriptions: Subscription[]
+    categories: Category[]
+    payments: Payment[]
+    settings: AppSettings[]
+  }
+}
+
 export interface SubscriptionDatabaseOptions {
   name?: string
   cloudUrl?: string
@@ -126,6 +161,8 @@ export class SubscriptionDatabase extends Dexie {
 
   localSettings!: Table<LocalSetting, string>
   diagnosticLogs!: Table<DiagnosticLog, number>
+  importPreview!: Table<ImportPreviewRow, string>
+  drafts!: Table<Draft, string>
 
   constructor(options: SubscriptionDatabaseOptions = {}) {
     super(
@@ -333,12 +370,48 @@ export class SubscriptionDatabase extends Dexie {
           })
       })
 
+    this.version(6)
+      .stores({
+        subscriptions:
+          `${syncedPrimaryKey}, status, categoryId, renewalMode, billingIntervalUnit, nextChargeDate, updatedAt, archivedAt, deletedAt`,
+        categories: `${syncedPrimaryKey}, &name, sortOrder, updatedAt`,
+        payments:
+          `${syncedPrimaryKey}, subscriptionId, scheduledDate, paidDate, status, [subscriptionId+scheduledDate], updatedAt, deletedAt`,
+        settings: `${syncedPrimaryKey}, &key, updatedAt`,
+        localSettings: '&key, updatedAt',
+        diagnosticLogs: '++id, timestamp, category',
+        importPreview: '&id, rowNumber, status',
+        drafts: '&id, entityType, updatedAt',
+      })
+      .upgrade(async tx => {
+        await tx
+          .table('subscriptions')
+          .toCollection()
+          .modify((subscription: Partial<Subscription>) => {
+            subscription.schemaVersion = 6
+          })
+
+        await tx
+          .table('payments')
+          .toCollection()
+          .modify((payment: Partial<Payment>) => {
+            payment.schemaVersion = 6
+          })
+
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((settings: Partial<AppSettings>) => {
+            settings.schemaVersion = 6
+          })
+      })
+
     if (!options.skipCloud) {
       this.cloud.configure({
         databaseUrl: resolveCloudUrl(options.cloudUrl),
         requireAuth: true,
         tryUseServiceWorker: true,
-        unsyncedTables: ['localSettings', 'diagnosticLogs'],
+        unsyncedTables: ['localSettings', 'diagnosticLogs', 'importPreview', 'drafts'],
       })
     }
   }
