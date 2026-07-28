@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import App from './App'
 
 describe('App', () => {
-  it('affiche la vue initiale des abonnements en français', () => {
+  it('affiche le tableau de bord comme page d\'accueil', () => {
     // Réinitialiser le hash pour que la page d'accueil soit affichée
     window.location.hash = ''
 
@@ -13,19 +13,7 @@ describe('App', () => {
       screen.getByRole('link', { name: 'Abos, accueil' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Abonnements' }),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole('heading', {
-        level: 2,
-        name: 'Liste des abonnements',
-      }),
-    ).toBeInTheDocument()
-    expect(screen.getByLabelText("Nombre d'abonnements")).toHaveTextContent(
-      '0 abonnement',
-    )
-    expect(
-      screen.getByText('Aucun abonnement ne correspond aux filtres.'),
+      screen.getByRole('heading', { level: 1, name: 'Pilotage' }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('region', { name: 'Statut global de synchronisation' }),
@@ -34,7 +22,10 @@ describe('App', () => {
       screen.getByRole('button', { name: 'Synchroniser maintenant' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { level: 2, name: 'À compléter' }),
+      screen.getByRole('heading', { level: 2, name: '⏰ Prochaines échéances' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 2, name: '⚠️ Abonnements à compléter' }),
     ).toBeInTheDocument()
   })
 
@@ -44,10 +35,19 @@ describe('App', () => {
     render(<App />)
 
     expect(
-      screen.getByRole('button', { name: 'Abonnements' }),
+      screen.getByRole('button', { name: '📊 Tableau de bord' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Configuration' }),
+      screen.getByRole('button', { name: '📋 Abonnements' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: '💳 Paiements' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: '⚙️ Configuration' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: '📦 Données' }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Ouvrir le diagnostic' }),

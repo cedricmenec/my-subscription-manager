@@ -1,8 +1,10 @@
 import type { ConnectedIdentity } from '../services/auth'
 
+export type AppPage = 'dashboard' | 'subscriptions' | 'payments' | 'settings' | 'data'
+
 interface TopBarProps {
-  currentPage: 'subscriptions' | 'settings' | 'data'
-  onNavigate: (page: 'subscriptions' | 'settings' | 'data') => void
+  currentPage: AppPage
+  onNavigate: (page: AppPage) => void
   onOpenDiagnostic: () => void
   identity: ConnectedIdentity
 }
@@ -23,24 +25,38 @@ export default function TopBar({ currentPage, onNavigate, onOpenDiagnostic, iden
       <nav className="topbar-nav" aria-label="Navigation principale">
         <button
           type="button"
+          className={`topbar-nav-link${currentPage === 'dashboard' ? ' topbar-nav-link-active' : ''}`}
+          onClick={() => onNavigate('dashboard')}
+        >
+          📊 Tableau de bord
+        </button>
+        <button
+          type="button"
           className={`topbar-nav-link${currentPage === 'subscriptions' ? ' topbar-nav-link-active' : ''}`}
           onClick={() => onNavigate('subscriptions')}
         >
-          Abonnements
+          📋 Abonnements
+        </button>
+        <button
+          type="button"
+          className={`topbar-nav-link${currentPage === 'payments' ? ' topbar-nav-link-active' : ''}`}
+          onClick={() => onNavigate('payments')}
+        >
+          💳 Paiements
         </button>
         <button
           type="button"
           className={`topbar-nav-link${currentPage === 'settings' ? ' topbar-nav-link-active' : ''}`}
           onClick={() => onNavigate('settings')}
         >
-          Configuration
+          ⚙️ Configuration
         </button>
         <button
           type="button"
           className={`topbar-nav-link${currentPage === 'data' ? ' topbar-nav-link-active' : ''}`}
           onClick={() => onNavigate('data')}
         >
-          Données
+          📦 Données
         </button>
       </nav>
       <div className="topbar-actions">

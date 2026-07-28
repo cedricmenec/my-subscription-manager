@@ -21,7 +21,15 @@ export class SubscriptionValidationError extends Error {
   }
 }
 
-export type SubscriptionSort = 'nextChargeDate' | 'updatedAt'
+export type SubscriptionSort =
+  | 'nextChargeDate'
+  | 'updatedAt'
+  | 'name'
+  | 'currentPrice'
+  | 'createdAt'
+  | 'completion'
+
+export type SortDirection = 'asc' | 'desc'
 
 export interface SubscriptionFilters {
   search?: string
@@ -30,6 +38,11 @@ export interface SubscriptionFilters {
   renewalMode?: Subscription['renewalMode'] | 'ALL'
   onlyIncomplete?: boolean
   sortBy?: SubscriptionSort
+  sortDirection?: SortDirection
+  dateMin?: string
+  dateMax?: string
+  amountMin?: number
+  amountMax?: number
 }
 
 export interface CompletionResult {
@@ -310,18 +323,49 @@ export async function updateSubscription(
 function sortSubscriptions(
   subscriptions: Subscription[],
   sortBy: SubscriptionSort,
+  sortDirection: SortDirection = 'asc',
 ): Subscription[] {
-  if (sortBy === 'updatedAt') {
-    return subscriptions.sort(
-      (left, right) => right.updatedAt.getTime() - left.updatedAt.getTime(),
-    )
-  }
+  const multiplier = sortDirection === 'asc' ? 1 : -1
 
-  return subscriptions.sort((left, right) => {
-    const leftDate = left.nextChargeDate ?? '9999-12-31'
-    const rightDate = right.nextChargeDate ?? '9999-12-31'
-    return leftDate.localeCompare(rightDate)
-  })
+  switch (sortBy) {
+    case 'updatedAt':
+      return subscriptions.sort(
+        (left, right) => (right.updatedAt.getTime() - left.updatedAt.getTime()) * multiplier,
+      )
+
+    case 'name':
+      return subscriptions.sort((left, right) =>
+        left.name.localeCompare(right.name) * multiplier,
+      )
+
+    case 'currentPrice': {
+      return subscriptions.sort((left, right) => {
+        const leftPrice = typeof left.currentPrice === 'number' ? left.currentPrice : 0
+        const rightPrice = typeof right.currentPrice === 'number' ? right.currentPrice : 0
+        return (leftPrice - rightPrice) * multiplier
+      })
+    }
+
+    case 'createdAt':
+      return subscriptions.sort(
+        (left, right) => (left.createdAt.getTime() - right.createdAt.getTime()) * multiplier,
+      )
+
+    case 'completion':
+      return subscriptions.sort(
+        (left, right) =>
+          (computeSubscriptionCompletion(left).score - computeSubscriptionCompletion(right).score) *
+          multiplier,
+      )
+
+    case 'nextChargeDate':
+    default:
+      return subscriptions.sort((left, right) => {
+        const leftDate = left.nextChargeDate ?? '9999-12-31'
+        const rightDate = right.nextChargeDate ?? '9999-12-31'
+        return leftDate.localeCompare(rightDate) * multiplier
+      })
+  }
 }
 
 export async function archiveSubscription(
@@ -385,8 +429,32 @@ export async function listSubscriptions(
       return false
     }
 
+    if (filters.dateMin && subscription.nextChargeDate && subscription.nextChargeDate < filters.dateMin) {
+      return false
+    }
+
+    if (filters.dateMax && subscription.nextChargeDate && subscription.nextChargeDate > filters.dateMax) {
+      return false
+    }
+
+    if (
+      filters.amountMin !== undefined &&
+      typeof subscription.currentPrice === 'number' &&
+      subscription.currentPrice < filters.amountMin
+    ) {
+      return false
+    }
+
+    if (
+      filters.amountMax !== undefined &&
+      typeof subscription.currentPrice === 'number' &&
+      subscription.currentPrice > filters.amountMax
+    ) {
+      return false
+    }
+
     return true
   })
 
-  return sortSubscriptions(filtered, filters.sortBy ?? 'nextChargeDate')
+  return sortSubscriptions(filtered, filters.sortBy ?? 'nextChargeDate', filters.sortDirection)
 }

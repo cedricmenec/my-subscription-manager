@@ -1,21 +1,6 @@
 # Next Features
 
-## Top 3 prioritaires
-
-### 1. Import / Export (Lot 4)
-
-**Description :** Importer et exporter les données au format JSON ou CSV natif, avec documentation du schéma pour la transformation externe.
-
-**Objectif / valeur apportée :** Charger les 37 abonnements dans l'application via un format natif documenté. L'export JSON/CSV offre sauvegarde, portabilité et interopérabilité. Le format Excel actuel n'est pas géré nativement : l'utilisateur le transforme en CSV/JSON via un outil externe (IA, script, tableur) avant réimport.
-
-**Mental model :** Import JSON/CSV avec validation de schéma, détection des ambiguïtés (statuts, cycles), simulation avant écriture. Export JSON restaurable (toutes tables) + CSV abonnements/paiements. Transaction multi-table Dexie pour atomicité. Rapport de lignes valides, ambiguës, erronées. Tables `importPreview`, `drafts` locales pour la simulation. Schéma documenté dans `docs/import-schema.md`.
-
-| Format | Périmètre |
-|---|---|
-| JSON | Import + export natif restaurable (toutes tables) |
-| CSV | Import + export abonnements et paiements |
-
-**Transformation du fichier Excel actuel :** L'utilisateur peut utiliser un agent IA (Copilot, ChatGPT, Claude) ou un script pour transformer son fichier XLSX existant en CSV/JSON conforme au schéma documenté. L'agent applique le mapping (colonne → champ), interprète les ambiguïtés (cycle, statuts dans commentaires) et produit un fichier prêt à l'import. Cette transformation est un one-shot, pas une fonctionnalité de l'application.
+## Next Features
 
 ### 2. Vue Échéances
 

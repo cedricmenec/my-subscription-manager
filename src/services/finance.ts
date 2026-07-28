@@ -28,6 +28,15 @@ export interface ExcludedSubscriptionInfo {
   reason: string
 }
 
+export function parseOptionalNumber(value: string): number | undefined {
+  if (!value.trim()) {
+    return undefined
+  }
+
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue : undefined
+}
+
 export interface FinancialSummary {
   baseCurrency: string
   monthlyEquivalent: number

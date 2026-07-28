@@ -78,7 +78,7 @@ export function validateSnapshot(raw: unknown): SnapshotEnvelope {
     throw new SnapshotValidationError('La section data.settings est manquante ou invalide.')
   }
 
-  return envelope as SnapshotEnvelope
+  return envelope as unknown as SnapshotEnvelope
 }
 
 /**
