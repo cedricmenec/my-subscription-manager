@@ -63,7 +63,11 @@ export interface Subscription extends SyncedEntity {
   renewalMode: RenewalMode
   startDate?: string
   nextChargeDate?: string
+  nextRenewalDate?: string
+  renewalStartDate?: string
+  commitmentStartDate?: string
   pauseUntil?: string
+  pauseStartDate?: string
   serviceEndDate?: string
   managementUrl?: string
   cancellationUrl?: string
@@ -403,6 +407,42 @@ export class SubscriptionDatabase extends Dexie {
           .toCollection()
           .modify((settings: Partial<AppSettings>) => {
             settings.schemaVersion = 6
+          })
+      })
+
+    this.version(7)
+      .stores({
+        subscriptions:
+          `${syncedPrimaryKey}, status, categoryId, renewalMode, billingIntervalUnit, nextChargeDate, nextRenewalDate, updatedAt, archivedAt, deletedAt`,
+        categories: `${syncedPrimaryKey}, &name, sortOrder, updatedAt`,
+        payments:
+          `${syncedPrimaryKey}, subscriptionId, scheduledDate, paidDate, status, [subscriptionId+scheduledDate], updatedAt, deletedAt`,
+        settings: `${syncedPrimaryKey}, &key, updatedAt`,
+        localSettings: '&key, updatedAt',
+        diagnosticLogs: '++id, timestamp, category',
+        importPreview: '&id, rowNumber, status',
+        drafts: '&id, entityType, updatedAt',
+      })
+      .upgrade(async tx => {
+        await tx
+          .table('subscriptions')
+          .toCollection()
+          .modify((subscription: Partial<Subscription>) => {
+            subscription.schemaVersion = 7
+          })
+
+        await tx
+          .table('payments')
+          .toCollection()
+          .modify((payment: Partial<Payment>) => {
+            payment.schemaVersion = 7
+          })
+
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((settings: Partial<AppSettings>) => {
+            settings.schemaVersion = 7
           })
       })
 

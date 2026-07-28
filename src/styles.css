@@ -1249,6 +1249,72 @@ textarea:focus-visible {
   border-top: 1px solid #d9dfdd;
 }
 
+/* ── Dialog New Sections ── */
+
+.cycle-summary {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid #d9dfdd;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #2a3936;
+  background: #f4f6f5;
+}
+
+.inline-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inline-group input {
+  flex: 1;
+}
+
+.inline-group select {
+  width: auto;
+  min-width: 100px;
+}
+
+.field-info {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid #d9dfdd;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #173f3a;
+  background: #f0f9f6;
+}
+
+.field-info-full {
+  padding: 8px 0;
+  font-size: 0.875rem;
+  color: #52605d;
+  font-style: italic;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #6e7f7b;
+}
+
+.info-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #2a3936;
+}
+
 /* ── Dashboard Page ── */
 
 .dashboard-page {

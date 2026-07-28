@@ -35,6 +35,10 @@ export interface SubscriptionFormInput {
   renewalIntervalUnit?: IntervalUnit
   renewalIntervalCount?: number
   nextChargeDate?: string
+  nextRenewalDate?: string
+  renewalStartDate?: string
+  commitmentStartDate?: string
+  pauseStartDate?: string
   pauseUntil?: string
   serviceEndDate?: string
   managementUrl?: string
@@ -126,6 +130,22 @@ export function validateSubscriptionInput(
 
   if (input.nextChargeDate && !isValidCivilDate(input.nextChargeDate)) {
     errors.nextChargeDate = 'La date de prochaine échéance est invalide (YYYY-MM-DD).'
+  }
+
+  if (input.nextRenewalDate && !isValidCivilDate(input.nextRenewalDate)) {
+    errors.nextRenewalDate = 'La date de prochain renouvellement est invalide (YYYY-MM-DD).'
+  }
+
+  if (input.renewalStartDate && !isValidCivilDate(input.renewalStartDate)) {
+    errors.renewalStartDate = 'La date de début de renouvellement est invalide (YYYY-MM-DD).'
+  }
+
+  if (input.commitmentStartDate && !isValidCivilDate(input.commitmentStartDate)) {
+    errors.commitmentStartDate = "La date de début d'engagement est invalide (YYYY-MM-DD)."
+  }
+
+  if (input.pauseStartDate && !isValidCivilDate(input.pauseStartDate)) {
+    errors.pauseStartDate = 'La date de début de pause est invalide (YYYY-MM-DD).'
   }
 
   if (input.status === 'PAUSED' && input.pauseUntil && !isValidCivilDate(input.pauseUntil)) {

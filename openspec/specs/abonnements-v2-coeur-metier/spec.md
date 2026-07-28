@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+Définir le modèle `Subscription` et ses comportements associés (CRUD, validation, statuts, cycles), conformément à la spécification métier.
+
+## Requirements
 
 ### Requirement: Modèle abonnement v2 structuré
 

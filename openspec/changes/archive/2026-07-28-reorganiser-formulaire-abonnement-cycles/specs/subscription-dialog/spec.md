@@ -1,27 +1,10 @@
-## Purpose
-
-Définir les exigences pour le dialogue modal de création et d'édition des abonnements, structuré en sections, réutilisable depuis la liste et le dashboard.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Dialogue modal de création et d'édition d'abonnement
 
 L'application SHALL fournir un dialogue modal pour la création et l'édition des abonnements, structuré en sections fonctionnelles (Général, Cycle de facturation, Renouvellement, Engagement, Pause, Fin de service, URLs, Notes). Le dialogue est ouvert depuis un bouton "Nouvel abonnement" ou depuis le bouton "Modifier" d'un abonnement existant.
 
-#### Scenario: Ouverture du dialogue pour création
-
-- **WHEN** l'utilisateur clique sur le bouton "Nouvel abonnement"
-- **THEN** un dialogue modal s'ouvre avec le formulaire vide
-- **AND** le titre du dialogue est "Créer un abonnement"
-- **AND** le focus est placé sur le premier champ du formulaire
-
-#### Scenario: Ouverture du dialogue pour édition
-
-- **WHEN** l'utilisateur clique sur "Modifier" sur un abonnement existant
-- **THEN** un dialogue modal s'ouvre avec le formulaire pré-rempli
-- **AND** le titre du dialogue est "Modifier un abonnement"
-
-#### Scenario: Structure en sections du formulaire
+#### Scenario: Structure en sections du formulaire (modifié)
 
 - **WHEN** le dialogue est ouvert
 - **THEN** le formulaire est organisé en sections visuellement distinctes :
@@ -66,33 +49,33 @@ L'application SHALL fournir un dialogue modal pour la création et l'édition de
 - **THEN** la section Engagement est masquée
 - **AND** les champs d'engagement sont réinitialisés
 
-#### Scenario: Validation et soumission
+#### Scenario: Pause avec bouton dédié
 
-- **WHEN** l'utilisateur clique sur "Enregistrer"
-- **THEN** les validations métier sont appliquées
-- **AND** si des erreurs existent, elles sont affichées sous les champs concernés
-- **AND** si tout est valide, l'abonnement est créé/modifié localement
-- **AND** le dialogue se ferme
-- **AND** la liste est rafraîchie
+- **WHEN** l'utilisateur clique sur "Mettre en pause"
+- **THEN** la section Pause apparaît avec le début de pause (par défaut aujourd'hui) et la fin de pause
+- **AND** le statut de l'abonnement passe à `PAUSED` à la soumission
+- **WHEN** le statut de l'abonnement n'est pas `PAUSED` et que l'utilisateur n'a pas cliqué sur "Mettre en pause"
+- **THEN** la section Pause est masquée
 
-#### Scenario: Fermeture du dialogue
+#### Scenario: Fin de service
 
-- **WHEN** l'utilisateur clique sur "Annuler" ou appuie sur Échap
-- **THEN** le dialogue se ferme sans sauvegarder
-- **AND** le formulaire est réinitialisé
-
-#### Scenario: Fermeture par clic sur l'arrière-plan
-
-- **WHEN** l'utilisateur clique en dehors du dialogue
-- **THEN** le dialogue se ferme sans sauvegarder
+- **WHEN** l'abonnement a une date de fin de service renseignée
+- **THEN** la date est affichée dans une section dédiée
+- **WHEN** l'abonnement n'a pas de date de fin de service
+- **THEN** le message "Pas de fin de service programmée" est affiché
 
 ### Requirement: Accessibilité du dialogue modal
 
-Le dialogue modal SHALL respecter les critères d'accessibilité : piège de focus, rôle `dialog`, `aria-modal="true"`, `aria-labelledby` sur le titre.
+Le dialogue modal SHALL respecter les critères d'accessibilité : piège de focus, rôle `dialog`, `aria-modal="true"`, `aria-labelledby` sur le titre. Les sections conditionnelles (Renouvellement, Engagement, Pause) SHALL être accessibles au clavier lors de leur apparition.
 
-#### Scenario: Piège de focus
+#### Scenario: Accès clavier aux sections conditionnelles
 
-- **WHEN** le dialogue est ouvert
-- **THEN** le focus est piégé à l'intérieur du dialogue
-- **AND** la tabulation cyclique entre les éléments du dialogue
-- **AND** l'arrière-plan n'est pas focalisable
+- **WHEN** une section conditionnelle (Renouvellement, Engagement, Pause) apparaît
+- **THEN** les champs de la section sont accessibles au clavier
+- **AND** le focus est correctement géré lors de l'apparition/disparition des sections
+
+## REMOVED Requirements
+
+### Requirement: (contenu de la section Facturation et Dates remplacé)
+**Reason**: Les sections "Facturation" et "Dates" sont remplacées par les sections fonctionnelles "Cycle de facturation", "Renouvellement", "Engagement", "Pause" et "Fin de service".
+**Migration**: Les données existantes sont conservées et réaffectées dans les nouvelles sections.

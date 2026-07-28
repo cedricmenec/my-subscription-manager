@@ -28,6 +28,25 @@ export interface ExcludedSubscriptionInfo {
   reason: string
 }
 
+export function describeInterval(count: number | undefined, unit: IntervalUnit | undefined): string {
+  if (!count || !unit) {
+    return 'Cycle non défini'
+  }
+
+  switch (unit) {
+    case 'WEEK':
+      return count === 1 ? 'Toutes les semaines' : `Toutes les ${count} semaines`
+    case 'MONTH':
+      return count === 1 ? 'Tous les mois' : `Tous les ${count} mois`
+    case 'YEAR':
+      return count === 1 ? 'Tous les ans' : `Tous les ${count} ans`
+    case 'DAY':
+      return count === 1 ? 'Tous les jours' : `Tous les ${count} jours`
+    default:
+      return `${count} ${unit}`
+  }
+}
+
 export function parseOptionalNumber(value: string): number | undefined {
   if (!value.trim()) {
     return undefined

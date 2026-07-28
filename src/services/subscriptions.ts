@@ -10,6 +10,11 @@ import {
   validateStatusTransition,
   validateSubscriptionInput,
 } from './subscriptionValidation'
+import {
+  addIntervalToCivilDate,
+  compareCivilDates,
+  todayCivilDate,
+} from './civilDate'
 
 export class SubscriptionValidationError extends Error {
   readonly errors: Record<string, string>
@@ -64,6 +69,10 @@ export interface UpsertSubscriptionInput extends SubscriptionFormInput {
   renewalIntervalUnit?: IntervalUnit
   renewalIntervalCount?: number
   startDate?: string
+  nextRenewalDate?: string
+  renewalStartDate?: string
+  commitmentStartDate?: string
+  pauseStartDate?: string
   cancellationInstructions?: string
   notes?: string
 }
@@ -83,6 +92,26 @@ function cleanOptional(value?: string): string | undefined {
 
 function normalizePositiveInteger(value?: number): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined
+}
+
+export function computeNextRenewalDate(
+  renewalStartDate?: string,
+  renewalIntervalUnit?: IntervalUnit,
+  renewalIntervalCount?: number,
+  todayReference: Date = new Date(),
+): string | undefined {
+  if (!renewalStartDate || !renewalIntervalUnit || !renewalIntervalCount) {
+    return undefined
+  }
+
+  const today = todayCivilDate(todayReference)
+  let nextDate = renewalStartDate
+
+  while (compareCivilDates(nextDate, today) < 0) {
+    nextDate = addIntervalToCivilDate(nextDate, renewalIntervalUnit, renewalIntervalCount)
+  }
+
+  return nextDate
 }
 
 export function computeSubscriptionCompletion(
@@ -167,6 +196,10 @@ export async function createSubscription(
     renewalIntervalUnit: input.renewalIntervalUnit,
     renewalIntervalCount: input.renewalIntervalCount,
     nextChargeDate: input.nextChargeDate,
+    nextRenewalDate: input.nextRenewalDate,
+    renewalStartDate: input.renewalStartDate,
+    commitmentStartDate: input.commitmentStartDate,
+    pauseStartDate: input.pauseStartDate,
     pauseUntil: input.pauseUntil,
     serviceEndDate: input.serviceEndDate,
     managementUrl: input.managementUrl,
@@ -178,6 +211,16 @@ export async function createSubscription(
   }
 
   const now = new Date()
+
+  const autoRenewalDate =
+    input.renewalMode === 'AUTOMATIC'
+      ? input.nextRenewalDate ??
+        computeNextRenewalDate(
+          input.renewalStartDate,
+          input.renewalIntervalUnit,
+          input.renewalIntervalCount,
+        )
+      : undefined
 
   const subscription: Subscription = {
     id: createEntityId('sbs'),
@@ -197,7 +240,11 @@ export async function createSubscription(
     renewalIntervalCount: normalizePositiveInteger(input.renewalIntervalCount),
     startDate: cleanOptional(input.startDate),
     nextChargeDate: cleanOptional(input.nextChargeDate),
+    nextRenewalDate: autoRenewalDate ?? cleanOptional(input.nextRenewalDate),
+    renewalStartDate: cleanOptional(input.renewalStartDate),
+    commitmentStartDate: cleanOptional(input.commitmentStartDate),
     pauseUntil: cleanOptional(input.pauseUntil),
+    pauseStartDate: cleanOptional(input.pauseStartDate),
     serviceEndDate: cleanOptional(input.serviceEndDate),
     managementUrl: cleanOptional(input.managementUrl),
     cancellationUrl: cleanOptional(input.cancellationUrl),
@@ -205,7 +252,7 @@ export async function createSubscription(
     notes: cleanOptional(input.notes),
     createdAt: now,
     updatedAt: now,
-    schemaVersion: 5,
+    schemaVersion: 7,
   }
 
   await database.transaction('rw', database.subscriptions, async () => {
@@ -255,14 +302,26 @@ export async function updateSubscription(
       normalizePositiveInteger(patch.renewalIntervalCount) ?? current.renewalIntervalCount,
     startDate: cleanOptional(patch.startDate),
     nextChargeDate: cleanOptional(patch.nextChargeDate),
+    nextRenewalDate:
+      patch.renewalMode === 'AUTOMATIC'
+        ? cleanOptional(patch.nextRenewalDate) ??
+          computeNextRenewalDate(
+            cleanOptional(patch.renewalStartDate) ?? current.renewalStartDate,
+            patch.renewalIntervalUnit ?? current.renewalIntervalUnit,
+            normalizePositiveInteger(patch.renewalIntervalCount) ?? current.renewalIntervalCount,
+          )
+        : cleanOptional(patch.nextRenewalDate),
+    renewalStartDate: cleanOptional(patch.renewalStartDate),
+    commitmentStartDate: cleanOptional(patch.commitmentStartDate),
     pauseUntil: cleanOptional(patch.pauseUntil),
+    pauseStartDate: cleanOptional(patch.pauseStartDate),
     serviceEndDate: cleanOptional(patch.serviceEndDate),
     managementUrl: cleanOptional(patch.managementUrl),
     cancellationUrl: cleanOptional(patch.cancellationUrl),
     cancellationInstructions: cleanOptional(patch.cancellationInstructions),
     notes: cleanOptional(patch.notes),
     updatedAt: new Date(),
-    schemaVersion: 5,
+    schemaVersion: 7,
   }
 
   const validation = validateSubscriptionInput({
@@ -277,6 +336,10 @@ export async function updateSubscription(
     renewalIntervalUnit: merged.renewalIntervalUnit,
     renewalIntervalCount: merged.renewalIntervalCount,
     nextChargeDate: merged.nextChargeDate,
+    nextRenewalDate: merged.nextRenewalDate,
+    renewalStartDate: merged.renewalStartDate,
+    commitmentStartDate: merged.commitmentStartDate,
+    pauseStartDate: merged.pauseStartDate,
     pauseUntil: merged.pauseUntil,
     serviceEndDate: merged.serviceEndDate,
     managementUrl: merged.managementUrl,
@@ -303,7 +366,11 @@ export async function updateSubscription(
       renewalIntervalCount: merged.renewalIntervalCount,
       startDate: merged.startDate,
       nextChargeDate: merged.nextChargeDate,
+      nextRenewalDate: merged.nextRenewalDate,
+      renewalStartDate: merged.renewalStartDate,
+      commitmentStartDate: merged.commitmentStartDate,
       pauseUntil: merged.pauseUntil,
+      pauseStartDate: merged.pauseStartDate,
       serviceEndDate: merged.serviceEndDate,
       managementUrl: merged.managementUrl,
       cancellationUrl: merged.cancellationUrl,
@@ -313,7 +380,7 @@ export async function updateSubscription(
       renewalMode: merged.renewalMode,
       currentPrice: merged.currentPrice,
       updatedAt: merged.updatedAt,
-      schemaVersion: 5,
+      schemaVersion: 7,
     })
   })
 
@@ -375,7 +442,7 @@ export async function archiveSubscription(
   await database.subscriptions.update(id, {
     archivedAt: new Date(),
     updatedAt: new Date(),
-    schemaVersion: 5,
+    schemaVersion: 7,
   })
 }
 
