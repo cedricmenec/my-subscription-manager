@@ -494,17 +494,8 @@ export default function SubscriptionDialog({
               </label>
               <label>
                 Date de souscription
-                {editingId ? (
-                  <>
-                    <div className="field-info">{localForm.subscriptionDate || 'Non renseignée'}</div>
-                    <small className="field-hint">Lecture seule après création</small>
-                  </>
-                ) : (
-                  <>
-                    <input type="date" value={localForm.subscriptionDate} onChange={e => updateField('subscriptionDate', e.target.value)} />
-                    <small className="field-hint">Date de souscription initiale</small>
-                  </>
-                )}
+                <input type="date" value={localForm.subscriptionDate} onChange={e => updateField('subscriptionDate', e.target.value)} />
+                <small className="field-hint">Date de souscription initiale (ancre pour le calcul du renouvellement)</small>
               </label>
               <label>
                 Début de la période en cours

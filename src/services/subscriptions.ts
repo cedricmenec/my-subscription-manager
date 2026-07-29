@@ -311,14 +311,14 @@ export async function updateSubscription(
       normalizePositiveInteger(patch.renewalIntervalCount) ?? current.renewalIntervalCount,
     startDate: cleanOptional(patch.startDate),
     nextChargeDate: cleanOptional(patch.nextChargeDate),
-    // subscriptionDate est en lecture seule : on garde la valeur existante
-    subscriptionDate: current.subscriptionDate,
+    // subscriptionDate rendue modifiable : accepter la valeur du formulaire
+    subscriptionDate: cleanOptional(patch.subscriptionDate) ?? current.subscriptionDate,
     renewalPeriodStartDate: cleanOptional(patch.renewalPeriodStartDate),
     // nextRenewalDate est surchargé par le moteur de calcul : on recalcule ici en attendant le prochain run
     nextRenewalDate:
       patch.renewalMode === 'AUTOMATIC'
         ? computeNextRenewalDate(
-            current.subscriptionDate,
+            cleanOptional(patch.subscriptionDate) ?? current.subscriptionDate,
             patch.renewalIntervalUnit ?? current.renewalIntervalUnit,
             normalizePositiveInteger(patch.renewalIntervalCount) ?? current.renewalIntervalCount,
             cleanOptional(patch.renewalPeriodStartDate) ?? current.renewalPeriodStartDate,
