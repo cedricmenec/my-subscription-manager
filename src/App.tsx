@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import type { SyncState } from 'dexie-cloud-addon'
 import {
   db,
@@ -19,9 +20,9 @@ import { getSyncStatusLabel, mapSyncStateToAppStatus } from './services/syncStat
 import {
   getFinancialSummary,
   listPayments,
-  materializeProjectedPayments,
   updatePaymentStatus,
 } from './services/payments'
+import { createCalculationEngine } from './services/calculationEngine'
 import {
   archiveSubscription,
   listCategories,
@@ -119,6 +120,9 @@ function App() {
   const [newCategoryName, setNewCategoryName] = useState('')
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({})
 
+  const calculationEngine = useMemo(() => createCalculationEngine({ debounceMs: 250 }), [])
+  const livePayments = useLiveQuery(() => db.payments.orderBy('scheduledDate').toArray(), [])
+
   const appSyncStatus = useMemo(() => mapSyncStateToAppStatus(syncState), [syncState])
 
   // Synchronisation hash ↔ état de navigation
@@ -190,32 +194,33 @@ function App() {
   )
 
   useEffect(() => {
+    calculationEngine.start()
+    return () => calculationEngine.stop()
+  }, [calculationEngine])
+
+  useEffect(() => {
+    if (livePayments) {
+      setPayments(livePayments)
+    }
+  }, [livePayments])
+
+  useEffect(() => {
     async function loadContextData() {
       try {
-        const [loadedSubscriptions, loadedCategories] = await Promise.all([
+        const [loadedSubscriptions, loadedCategories, settings, loadedPayments, loadedSummary] = await Promise.all([
           listSubscriptions(filters),
           listCategories(),
+          db.settings.where('key').equals('main').first(),
+          listPayments(),
+          getFinancialSummary(),
         ])
 
         setSubscriptions(loadedSubscriptions)
         setCategories(loadedCategories.map(category => ({ id: category.id, name: category.name })))
 
-        const settings = await db.settings.where('key').equals('main').first()
         if (settings?.exchangeRates) {
           setExchangeRates(settings.exchangeRates)
         }
-
-        try {
-          await materializeProjectedPayments()
-        } catch (error) {
-          console.error('materializeProjectedPayments failed during initial load', error)
-          setFeedback('Impossible de générer certaines échéances. Les données affichées restent disponibles.')
-        }
-
-        const [loadedPayments, loadedSummary] = await Promise.all([
-          listPayments(),
-          getFinancialSummary(),
-        ])
 
         setPayments(loadedPayments)
         setSummary(loadedSummary)
@@ -228,7 +233,7 @@ function App() {
     }
 
     void loadContextData()
-  }, [filters])
+  }, [calculationEngine, filters])
 
   const effectiveOperationStatus = useMemo(
     () => resolveOperationStatus(operationStatus, appSyncStatus),
@@ -246,9 +251,9 @@ function App() {
 
   async function refreshFinance() {
     try {
-      await materializeProjectedPayments()
+      await calculationEngine.run(undefined, 'manual')
     } catch (error) {
-      console.error('materializeProjectedPayments failed during refresh', error)
+      console.error('calculationEngine run failed during refresh', error)
       setFeedback('Impossible de générer certaines échéances. Les données affichées restent disponibles.')
     }
 
@@ -476,6 +481,7 @@ function App() {
         isOpen={showDiagnostic}
         onClose={() => setShowDiagnostic(false)}
         info={diagnosticInfo}
+        debugGraph={calculationEngine.getDebugGraph()}
       />
 
       {feedback ? <p className="feedback">{feedback}</p> : null}

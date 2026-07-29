@@ -202,6 +202,7 @@ export default function SubscriptionDialog({
 }: SubscriptionDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const initialFormRef = useRef(formState)
   const [localForm, setLocalForm] = useState<SubscriptionFormState>(formState)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -230,15 +231,27 @@ export default function SubscriptionDialog({
     setLocalForm(prev => ({ ...prev, [field]: value }))
   }
 
+  function hasUnsavedChanges(): boolean {
+    return JSON.stringify(initialFormRef.current) !== JSON.stringify(localForm)
+  }
+
   function handleBackdropClick(event: React.MouseEvent) {
     if (event.target === dialogRef.current) {
-      onClose()
+      if (!hasUnsavedChanges()) {
+        onClose()
+      }
     }
   }
 
   function handleKeyDown(event: React.KeyboardEvent) {
     if (event.key === 'Escape') {
-      onClose()
+      if (hasUnsavedChanges()) {
+        if (window.confirm('Voulez-vous vraiment annuler les modifications en cours ?')) {
+          onClose()
+        }
+      } else {
+        onClose()
+      }
     }
   }
 
@@ -611,7 +624,15 @@ export default function SubscriptionDialog({
         </fieldset>
 
         <div className="dialog-actions">
-          <button type="button" className="secondary-button" onClick={onClose} disabled={isSubmitting}>
+          <button type="button" className="secondary-button" onClick={() => {
+            if (hasUnsavedChanges()) {
+              if (window.confirm('Voulez-vous vraiment annuler les modifications en cours ?')) {
+                onClose()
+              }
+            } else {
+              onClose()
+            }
+          }} disabled={isSubmitting}>
             Annuler
           </button>
           <button type="submit" disabled={isSubmitting}>

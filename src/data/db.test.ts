@@ -23,7 +23,7 @@ describe('SubscriptionDatabase', () => {
       cloudUrl: 'https://invalid.dexie.cloud',
     })
 
-    expect(testDb.verno).toBe(7)
+    expect(testDb.verno).toBe(8)
     expect(testDb.tables.map(table => table.name)).toEqual(
       expect.arrayContaining([
         'subscriptions',

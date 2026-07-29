@@ -59,7 +59,15 @@ rules:
     - Explain local-first data flow and trust boundaries whenever storage or synchronization is affected.
     - Record schema-versioning and migration impact for every persisted-data change.
     - Document rejected approaches when they would violate the no-custom-backend constraint.
+    - Whenever the change introduces a new complex concept, subsystem, or architecture pattern, state
+      that a developer guide must be created or updated under docs/developers/ (simplified English,
+      short sections, concrete examples grounded in the actual codebase).
+    - Whenever the change affects how the product is used (new user-facing behavior, workflow, or
+      setting), state that a user guide must be created or updated under docs/users/ (French, matching
+      the application's interface language).
   tasks:
     - Order tasks by foundation, implementation, tests, and verification.
     - Include explicit automated-test and build-verification tasks.
     - Keep each checkbox concrete and independently verifiable.
+    - Include a dedicated, independently verifiable task for each developer guide (docs/developers/)
+      and user guide (docs/users/) identified as necessary in design.md.

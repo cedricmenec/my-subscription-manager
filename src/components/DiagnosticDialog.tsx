@@ -1,4 +1,6 @@
-import { useRef, useEffect } from 'react'
+import { useEffect, useRef } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '../data/db'
 
 export interface DiagnosticInfo {
   appVersion: string
@@ -14,11 +16,16 @@ interface DiagnosticDialogProps {
   isOpen: boolean
   onClose: () => void
   info: DiagnosticInfo
+  debugGraph: string[]
 }
 
-export default function DiagnosticDialog({ isOpen, onClose, info }: DiagnosticDialogProps) {
+export default function DiagnosticDialog({ isOpen, onClose, info, debugGraph }: DiagnosticDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const diagnosticLogs = useLiveQuery(() => db.diagnosticLogs.orderBy('timestamp').reverse().limit(20).toArray(), [])
+
+  const graphLines = debugGraph.length > 0 ? debugGraph : ['(aucune dépendance)']
+  const logLines = diagnosticLogs?.map(entry => `${entry.timestamp.toLocaleString()} [${entry.category}] ${entry.message}`) ?? []
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -106,6 +113,14 @@ export default function DiagnosticDialog({ isOpen, onClose, info }: DiagnosticDi
         </div>
       </dl>
       <div className="diagnostic-dialog-footer">
+        <section className="diagnostic-dialog-section">
+          <h3>Graphe de dépendances</h3>
+          <pre>{graphLines.join('\n')}</pre>
+        </section>
+        <section className="diagnostic-dialog-section">
+          <h3>Historique d'exécution</h3>
+          <pre>{logLines.length > 0 ? logLines.join('\n') : '(aucune entrée)'}</pre>
+        </section>
         <button type="button" onClick={onClose}>
           Fermer
         </button>

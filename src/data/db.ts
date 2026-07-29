@@ -109,6 +109,12 @@ export interface DiagnosticLog {
   message: string
 }
 
+export interface CalculationState {
+  key: string
+  value: string
+  updatedAt: Date
+}
+
 export interface ImportPreviewRow {
   id: string
   rowNumber: number
@@ -165,6 +171,7 @@ export class SubscriptionDatabase extends Dexie {
 
   localSettings!: Table<LocalSetting, string>
   diagnosticLogs!: Table<DiagnosticLog, number>
+  calculationState!: Table<CalculationState, string>
   importPreview!: Table<ImportPreviewRow, string>
   drafts!: Table<Draft, string>
 
@@ -446,12 +453,27 @@ export class SubscriptionDatabase extends Dexie {
           })
       })
 
+    this.version(8)
+      .stores({
+        subscriptions:
+          `${syncedPrimaryKey}, status, categoryId, renewalMode, billingIntervalUnit, nextChargeDate, nextRenewalDate, updatedAt, archivedAt, deletedAt`,
+        categories: `${syncedPrimaryKey}, &name, sortOrder, updatedAt`,
+        payments:
+          `${syncedPrimaryKey}, subscriptionId, scheduledDate, paidDate, status, [subscriptionId+scheduledDate], updatedAt, deletedAt`,
+        settings: `${syncedPrimaryKey}, &key, updatedAt`,
+        localSettings: '&key, updatedAt',
+        diagnosticLogs: '++id, timestamp, category',
+        calculationState: '&key, updatedAt',
+        importPreview: '&id, rowNumber, status',
+        drafts: '&id, entityType, updatedAt',
+      })
+
     if (!options.skipCloud) {
       this.cloud.configure({
         databaseUrl: resolveCloudUrl(options.cloudUrl),
         requireAuth: true,
         tryUseServiceWorker: true,
-        unsyncedTables: ['localSettings', 'diagnosticLogs', 'importPreview', 'drafts'],
+        unsyncedTables: ['localSettings', 'diagnosticLogs', 'calculationState', 'importPreview', 'drafts'],
       })
     }
   }
