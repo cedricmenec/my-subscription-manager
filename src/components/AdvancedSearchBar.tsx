@@ -5,6 +5,10 @@ interface AdvancedSearchBarProps {
   onDateMinChange: (value: string) => void
   dateMax: string
   onDateMaxChange: (value: string) => void
+  renewalDateMin: string
+  onRenewalDateMinChange: (value: string) => void
+  renewalDateMax: string
+  onRenewalDateMaxChange: (value: string) => void
   amountMin: string
   onAmountMinChange: (value: string) => void
   amountMax: string
@@ -23,6 +27,10 @@ export default function AdvancedSearchBar({
   onDateMinChange,
   dateMax,
   onDateMaxChange,
+  renewalDateMin,
+  onRenewalDateMinChange,
+  renewalDateMax,
+  onRenewalDateMaxChange,
   amountMin,
   onAmountMinChange,
   amountMax,
@@ -93,6 +101,28 @@ export default function AdvancedSearchBar({
               type="date"
               value={dateMax}
               onChange={e => onDateMaxChange(e.target.value)}
+              className="search-input"
+            />
+          </div>
+
+          <div className="search-field">
+            <label htmlFor="search-renewal-min" className="search-label">Renouvellement min</label>
+            <input
+              id="search-renewal-min"
+              type="date"
+              value={renewalDateMin}
+              onChange={e => onRenewalDateMinChange(e.target.value)}
+              className="search-input"
+            />
+          </div>
+
+          <div className="search-field">
+            <label htmlFor="search-renewal-max" className="search-label">Renouvellement max</label>
+            <input
+              id="search-renewal-max"
+              type="date"
+              value={renewalDateMax}
+              onChange={e => onRenewalDateMaxChange(e.target.value)}
               className="search-input"
             />
           </div>

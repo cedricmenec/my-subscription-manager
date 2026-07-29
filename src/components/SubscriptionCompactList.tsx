@@ -7,6 +7,7 @@ export type CompactColumn =
   | 'currentPrice'
   | 'billingInterval'
   | 'nextChargeDate'
+  | 'nextRenewalDate'
   | 'categoryId'
 
 export const COMPACT_COLUMNS: { key: CompactColumn; label: string; sortable: boolean }[] = [
@@ -15,6 +16,7 @@ export const COMPACT_COLUMNS: { key: CompactColumn; label: string; sortable: boo
   { key: 'currentPrice', label: 'Prix', sortable: true },
   { key: 'billingInterval', label: 'Cycle', sortable: false },
   { key: 'nextChargeDate', label: 'Échéance', sortable: true },
+  { key: 'nextRenewalDate', label: 'Renouvellement', sortable: true },
   { key: 'categoryId', label: 'Catégorie', sortable: true },
 ]
 
@@ -120,7 +122,7 @@ export default function SubscriptionCompactList({
         <tbody>
           {subscriptions.length === 0 ? (
             <tr>
-              <td colSpan={7} className="compact-empty">
+              <td colSpan={8} className="compact-empty">
                 Aucun abonnement ne correspond aux filtres.
               </td>
             </tr>
@@ -152,6 +154,7 @@ export default function SubscriptionCompactList({
                 </td>
                 <td>{formatInterval(sub.billingIntervalCount, sub.billingIntervalUnit)}</td>
                 <td>{sub.nextChargeDate ?? '—'}</td>
+                <td>{sub.nextRenewalDate ?? 'Calcul auto'}</td>
                 <td>{getCategoryName(sub.categoryId)}</td>
                 <td className="compact-cell-actions">
                   <button

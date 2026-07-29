@@ -84,6 +84,8 @@ export default function SubscriptionsPage({
 
   const [dateMin, setDateMin] = useState('')
   const [dateMax, setDateMax] = useState('')
+  const [renewalDateMin, setRenewalDateMin] = useState('')
+  const [renewalDateMax, setRenewalDateMax] = useState('')
   const [amountMin, setAmountMin] = useState('')
   const [amountMax, setAmountMax] = useState('')
   const [statusFilter, setStatusFilter] = useState<SubscriptionStatus | 'ALL'>('ALL')
@@ -104,9 +106,11 @@ export default function SubscriptionsPage({
     onlyIncomplete,
     dateMin: dateMin || undefined,
     dateMax: dateMax || undefined,
+    renewalDateMin: renewalDateMin || undefined,
+    renewalDateMax: renewalDateMax || undefined,
     amountMin: amountMin ? parseFloat(amountMin) : undefined,
     amountMax: amountMax ? parseFloat(amountMax) : undefined,
-  }), [search, statusFilter, categoryFilter, renewalFilter, sortBy, sortDirection, onlyIncomplete, dateMin, dateMax, amountMin, amountMax])
+  }), [search, statusFilter, categoryFilter, renewalFilter, sortBy, sortDirection, onlyIncomplete, dateMin, dateMax, renewalDateMin, renewalDateMax, amountMin, amountMax])
 
   // Client-side filtering (since we already have the data)
   const filteredSubscriptions = useMemo(() => {
@@ -149,6 +153,12 @@ export default function SubscriptionsPage({
     if (filters.dateMax) {
       result = result.filter(s => !s.nextChargeDate || s.nextChargeDate <= filters.dateMax!)
     }
+    if (filters.renewalDateMin) {
+      result = result.filter(s => !s.nextRenewalDate || s.nextRenewalDate >= filters.renewalDateMin!)
+    }
+    if (filters.renewalDateMax) {
+      result = result.filter(s => !s.nextRenewalDate || s.nextRenewalDate <= filters.renewalDateMax!)
+    }
     if (filters.amountMin !== undefined) {
       result = result.filter(s => typeof s.currentPrice !== 'number' || s.currentPrice >= filters.amountMin!)
     }
@@ -174,9 +184,11 @@ export default function SubscriptionsPage({
         case 'updatedAt':
           return (b.updatedAt.getTime() - a.updatedAt.getTime()) * dir
         case 'nextChargeDate':
+        case 'nextRenewalDate':
         default: {
-          const da = a.nextChargeDate ?? '9999-12-31'
-          const db = b.nextChargeDate ?? '9999-12-31'
+          const field = filters.sortBy === 'nextRenewalDate' ? 'nextRenewalDate' : 'nextChargeDate'
+          const da = a[field] ?? '9999-12-31'
+          const db = b[field] ?? '9999-12-31'
           return da.localeCompare(db) * dir
         }
       }
@@ -206,6 +218,7 @@ export default function SubscriptionsPage({
       status: 'name',
       currentPrice: 'currentPrice',
       nextChargeDate: 'nextChargeDate',
+      nextRenewalDate: 'nextRenewalDate',
       categoryId: 'name',
     }
     const newSortBy = sortMap[column] ?? 'nextChargeDate'
@@ -287,6 +300,7 @@ export default function SubscriptionsPage({
             Tri
             <select value={sortBy} onChange={e => setSortBy(e.target.value as SubscriptionSort)}>
               <option value="nextChargeDate">Prochaine échéance</option>
+              <option value="nextRenewalDate">Prochain renouvellement</option>
               <option value="name">Nom</option>
               <option value="currentPrice">Montant</option>
               <option value="createdAt">Date de création</option>
@@ -309,6 +323,10 @@ export default function SubscriptionsPage({
         onDateMinChange={setDateMin}
         dateMax={dateMax}
         onDateMaxChange={setDateMax}
+        renewalDateMin={renewalDateMin}
+        onRenewalDateMinChange={setRenewalDateMin}
+        renewalDateMax={renewalDateMax}
+        onRenewalDateMaxChange={setRenewalDateMax}
         amountMin={amountMin}
         onAmountMinChange={setAmountMin}
         amountMax={amountMax}

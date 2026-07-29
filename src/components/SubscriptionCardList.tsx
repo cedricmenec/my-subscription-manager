@@ -103,6 +103,12 @@ export default function SubscriptionCardList({
                   <span className="card-date-value">{sub.nextChargeDate}</span>
                 </p>
               )}
+              {sub.nextRenewalDate && (
+                <p className="card-date">
+                  <span className="card-date-label">Prochain renouvellement</span>
+                  <span className="card-date-value">{sub.nextRenewalDate}</span>
+                </p>
+              )}
             </div>
 
             <div className="card-footer">

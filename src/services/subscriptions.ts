@@ -28,6 +28,7 @@ export class SubscriptionValidationError extends Error {
 
 export type SubscriptionSort =
   | 'nextChargeDate'
+  | 'nextRenewalDate'
   | 'updatedAt'
   | 'name'
   | 'currentPrice'
@@ -46,6 +47,8 @@ export interface SubscriptionFilters {
   sortDirection?: SortDirection
   dateMin?: string
   dateMax?: string
+  renewalDateMin?: string
+  renewalDateMax?: string
   amountMin?: number
   amountMax?: number
 }
