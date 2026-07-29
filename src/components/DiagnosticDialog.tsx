@@ -24,14 +24,12 @@ export default function DiagnosticDialog({ isOpen, onClose, info, debugGraph, on
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const [isRecalculating, setIsRecalculating] = useState(false)
-  const diagnosticLogs = useLiveQuery(() => db.diagnosticLogs.orderBy('timestamp').reverse().limit(20).toArray(), [])
   const calcLogs = useLiveQuery(
     () => db.diagnosticLogs.where('category').equals('calc-engine').reverse().limit(20).toArray(),
     [],
   )
 
   const graphLines = debugGraph.length > 0 ? debugGraph : ['(aucune dépendance)']
-  const logLines = diagnosticLogs?.map(entry => `${entry.timestamp.toLocaleString()} [${entry.category}] ${entry.message}`) ?? []
 
   async function handleRecalculate() {
     setIsRecalculating(true)
@@ -170,12 +168,8 @@ export default function DiagnosticDialog({ isOpen, onClose, info, debugGraph, on
             onClick={handleRecalculate}
             disabled={isRecalculating}
           >
-            {isRecalculating ? 'Recalcul en cours…' : 'Recalculer'}
+            {isRecalculating ? 'Recalcul en cours…' : 'Recalculer les paiements projetés'}
           </button>
-        </section>
-        <section className="diagnostic-dialog-section">
-          <h3>Historique d'exécution (tous)</h3>
-          <pre>{logLines.length > 0 ? logLines.join('\n') : '(aucune entrée)'}</pre>
         </section>
         <button type="button" onClick={onClose}>
           Fermer

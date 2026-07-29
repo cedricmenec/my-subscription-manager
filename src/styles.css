@@ -1557,9 +1557,79 @@ textarea:focus-visible {
 
 .diagnostic-dialog-footer {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 16px;
   border-top: 1px solid #d9dfdd;
-  padding: 12px 20px;
+  padding: 16px 20px;
+}
+
+.diagnostic-dialog-section {
+  border-bottom: 1px dashed #d9dfdd;
+  padding-bottom: 12px;
+}
+
+.diagnostic-dialog-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.diagnostic-dialog-section h3 {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: #52605d;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.diagnostic-dialog-section pre {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #f7f8f8;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.diagnostic-log-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 300px;
+  overflow-y: auto;
+  background: #f7f8f8;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.diagnostic-log-item {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  border-bottom: 1px solid #e8ebea;
+}
+
+.diagnostic-log-item:last-child {
+  border-bottom: none;
+}
+
+.diagnostic-log-date {
+  color: #52605d;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.diagnostic-log-detail {
+  color: #17211f;
+}
+
+.diagnostic-dialog-footer .secondary-button {
+  align-self: flex-start;
 }
 
 /* ── Settings Page ── */
