@@ -33,19 +33,27 @@ export async function materializeProjectedPayments(
   const createdPayments: Payment[] = []
 
   try {
-    const [subscriptions, existingPayments] = await Promise.all([
-      database.subscriptions.toArray(),
-      database.payments.toArray(),
-    ])
-
-    const existingKeys = new Set(
-      existingPayments.map(payment => `${payment.subscriptionId}:${payment.scheduledDate}`),
-    )
+    const subscriptions = await database.subscriptions.toArray()
 
     await database.transaction('rw', database.payments, async () => {
       for (const subscription of subscriptions) {
         if (!subscription.id) {
           continue
+        }
+
+        // Purge orphaned GENERATED payments for this subscription before projecting.
+        // This ensures that when a subscription's date or amount changes, the old
+        // projected payment is removed and only the new projection persists.
+        const existingGenerated = await database.payments
+          .where('subscriptionId')
+          .equals(subscription.id)
+          .and(payment => payment.source === 'GENERATED')
+          .toArray()
+
+        for (const orphan of existingGenerated) {
+          if (orphan.id) {
+            await database.payments.delete(orphan.id)
+          }
         }
 
         let projected: ReturnType<typeof projectSubscriptionPayments>
@@ -59,11 +67,6 @@ export async function materializeProjectedPayments(
         }
 
         for (const candidate of projected) {
-          const key = `${candidate.subscriptionId}:${candidate.scheduledDate}`
-          if (existingKeys.has(key)) {
-            continue
-          }
-
           const payment: Payment = {
             id: createEntityId('pym'),
             subscriptionId: candidate.subscriptionId,
@@ -78,7 +81,6 @@ export async function materializeProjectedPayments(
 
           try {
             await database.payments.put(payment)
-            existingKeys.add(key)
             createdPayments.push(payment)
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error)

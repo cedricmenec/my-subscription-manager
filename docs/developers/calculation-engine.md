@@ -19,6 +19,17 @@ Le moteur de calcul local-first centralise la recomposition des données dériv�
 
 Le moteur est lancé au démarrage de l'application puis réagit aux mutations locales et aux événements de rafraîchissement. Les calculateurs peuvent être déclenchés manuellement via l'API publishTrigger.
 
+## Nettoyage des projections orphelines
+
+Le calculateur `projected-payments` purge les anciens paiements `GENERATED` avant de créer les nouvelles projections. Cela garantit qu'après modification d'un abonnement (changement de date d'échéance ou de montant), l'ancien paiement projeté est supprimé et remplacé par le nouveau.
+
+Le processus pour chaque abonnement :
+1. Suppression de tous les paiements avec `source: 'GENERATED'` pour cet abonnement
+2. Projection des nouveaux paiements
+3. Création des nouveaux paiements
+
+Tout s'effectue dans une transaction Dexie atomique. Seuls les paiements `GENERATED` sont supprimés — les paiements `MANUAL`, `CONFIRMED_PAID`, `IMPORTED`, etc. ne sont jamais affectés.
+
 ## Validation
 
-Les tests de régression se trouvent dans src/services/calculationEngine.test.ts.
+Les tests de régression se trouvent dans src/services/calculationEngine.test.ts et src/services/payments.test.ts.

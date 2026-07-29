@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../data/db'
 
@@ -17,15 +17,30 @@ interface DiagnosticDialogProps {
   onClose: () => void
   info: DiagnosticInfo
   debugGraph: string[]
+  onRecalculate: () => Promise<void>
 }
 
-export default function DiagnosticDialog({ isOpen, onClose, info, debugGraph }: DiagnosticDialogProps) {
+export default function DiagnosticDialog({ isOpen, onClose, info, debugGraph, onRecalculate }: DiagnosticDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const [isRecalculating, setIsRecalculating] = useState(false)
   const diagnosticLogs = useLiveQuery(() => db.diagnosticLogs.orderBy('timestamp').reverse().limit(20).toArray(), [])
+  const calcLogs = useLiveQuery(
+    () => db.diagnosticLogs.where('category').equals('calc-engine').reverse().limit(20).toArray(),
+    [],
+  )
 
   const graphLines = debugGraph.length > 0 ? debugGraph : ['(aucune dépendance)']
   const logLines = diagnosticLogs?.map(entry => `${entry.timestamp.toLocaleString()} [${entry.category}] ${entry.message}`) ?? []
+
+  async function handleRecalculate() {
+    setIsRecalculating(true)
+    try {
+      await onRecalculate()
+    } finally {
+      setIsRecalculating(false)
+    }
+  }
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -118,7 +133,48 @@ export default function DiagnosticDialog({ isOpen, onClose, info, debugGraph }: 
           <pre>{graphLines.join('\n')}</pre>
         </section>
         <section className="diagnostic-dialog-section">
-          <h3>Historique d'exécution</h3>
+          <h3>Historique des calculs</h3>
+          {calcLogs && calcLogs.length > 0 ? (
+            <ul className="diagnostic-log-list">
+              {calcLogs.map((entry, index) => {
+                let summary: string
+                try {
+                  const parsed = JSON.parse(entry.message)
+                  const duration = parsed.finishedAt && parsed.startedAt
+                    ? `${new Date(parsed.finishedAt).getTime() - new Date(parsed.startedAt).getTime()}ms`
+                    : '?'
+                  const calculatorStatus = parsed.entries?.length
+                    ? ` (${parsed.entries.map((e: { calculatorId: string; status: string }) => `${e.calculatorId}:${e.status}`).join(', ')})`
+                    : ''
+                  summary = `${parsed.status ?? 'unknown'} — ${parsed.trigger ?? '?'} — ${duration}${calculatorStatus}`
+                } catch {
+                  summary = entry.message
+                }
+                return (
+                  <li key={entry.id ?? index} className="diagnostic-log-item">
+                    <span className="diagnostic-log-date">{new Date(entry.timestamp).toLocaleString()}</span>
+                    <span className="diagnostic-log-detail">{summary}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <pre>(aucune exécution enregistrée)</pre>
+          )}
+        </section>
+        <section className="diagnostic-dialog-section">
+          <h3>Actions</h3>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={handleRecalculate}
+            disabled={isRecalculating}
+          >
+            {isRecalculating ? 'Recalcul en cours…' : 'Recalculer'}
+          </button>
+        </section>
+        <section className="diagnostic-dialog-section">
+          <h3>Historique d'exécution (tous)</h3>
           <pre>{logLines.length > 0 ? logLines.join('\n') : '(aucune entrée)'}</pre>
         </section>
         <button type="button" onClick={onClose}>

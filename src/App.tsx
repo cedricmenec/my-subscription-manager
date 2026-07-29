@@ -19,7 +19,6 @@ import {
 import { getSyncStatusLabel, mapSyncStateToAppStatus } from './services/syncState'
 import {
   getFinancialSummary,
-  listPayments,
   updatePaymentStatus,
 } from './services/payments'
 import { createCalculationEngine } from './services/calculationEngine'
@@ -207,11 +206,10 @@ function App() {
   useEffect(() => {
     async function loadContextData() {
       try {
-        const [loadedSubscriptions, loadedCategories, settings, loadedPayments, loadedSummary] = await Promise.all([
+        const [loadedSubscriptions, loadedCategories, settings, loadedSummary] = await Promise.all([
           listSubscriptions(filters),
           listCategories(),
           db.settings.where('key').equals('main').first(),
-          listPayments(),
           getFinancialSummary(),
         ])
 
@@ -222,7 +220,6 @@ function App() {
           setExchangeRates(settings.exchangeRates)
         }
 
-        setPayments(loadedPayments)
         setSummary(loadedSummary)
       } catch (error) {
         console.error('loadContextData failed', error)
@@ -258,8 +255,7 @@ function App() {
     }
 
     try {
-      const [loadedPayments, loadedSummary] = await Promise.all([listPayments(), getFinancialSummary()])
-      setPayments(loadedPayments)
+      const loadedSummary = await getFinancialSummary()
       setSummary(loadedSummary)
     } catch (error) {
       console.error('refreshFinance failed', error)
@@ -482,6 +478,7 @@ function App() {
         onClose={() => setShowDiagnostic(false)}
         info={diagnosticInfo}
         debugGraph={calculationEngine.getDebugGraph()}
+        onRecalculate={refreshFinance}
       />
 
       {feedback ? <p className="feedback">{feedback}</p> : null}

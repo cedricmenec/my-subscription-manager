@@ -1,7 +1,5 @@
-## Purpose
+## MODIFIED Requirements
 
-Définir les exigences pour le tableau de bord (dashboard) servant de page d'accueil avec cockpit de pilotage : résumé financier, prochaines échéances et alertes de complétude.
-## Requirements
 ### Requirement: Dashboard d'accueil avec cockpit de pilotage
 
 L'application SHALL afficher un tableau de bord (dashboard) comme page d'accueil par défaut, avec le résumé financier (4 cartes), les prochaines échéances et les alertes de complétude.
@@ -30,15 +28,3 @@ L'application SHALL afficher un tableau de bord (dashboard) comme page d'accueil
 - **WHEN** le dashboard est affiché
 - **THEN** une section liste les abonnements incomplets
 - **AND** chaque abonnement incomplet affiche son nom et son score de complétude
-
-### Requirement: Indicateur de synchronisation sur le dashboard
-
-Le dashboard SHALL afficher l'état global de synchronisation et le statut de la dernière opération locale.
-
-#### Scenario: Affichage du statut sync
-
-- **WHEN** le dashboard est affiché
-- **THEN** le statut de synchronisation est affiché
-- **AND** le statut de la dernière opération locale est affiché
-- **AND** un bouton "Synchroniser maintenant" est disponible
-
