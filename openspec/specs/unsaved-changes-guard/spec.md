@@ -1,9 +1,8 @@
+# unsaved-changes-guard Specification
+
 ## Purpose
-
-Définir les exigences pour la protection contre la perte de modifications non sauvegardées dans les dialogues de l'application.
-
+TBD - created by archiving change empecher-fermeture-dialog-sans-sauvegarde. Update Purpose after archive.
 ## Requirements
-
 ### Requirement: Protection contre la fermeture du dialogue avec modifications non sauvegardées
 
 L'application SHALL empêcher la perte involontaire de données lorsque l'utilisateur tente de fermer un dialogue contenant des modifications non sauvegardées.
@@ -71,3 +70,4 @@ Le système SHALL détecter si le formulaire a été modifié par rapport à son
 - **THEN** le système détecte que le formulaire est modifié
 - **WHEN** l'utilisateur restaure tous les champs à leur valeur initiale
 - **THEN** le système détecte que le formulaire n'est plus modifié
+

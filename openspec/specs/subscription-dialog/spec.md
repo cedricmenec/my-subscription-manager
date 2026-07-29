@@ -1,9 +1,7 @@
 ## Purpose
 
 Définir les exigences pour le dialogue modal de création et d'édition des abonnements, structuré en sections, réutilisable depuis la liste et le dashboard.
-
 ## Requirements
-
 ### Requirement: Dialogue modal de création et d'édition d'abonnement
 
 L'application SHALL fournir un dialogue modal pour la création et l'édition des abonnements, structuré en sections fonctionnelles (Général, Cycle de facturation, Renouvellement, Engagement, Pause, Fin de service, URLs, Notes). Le dialogue est ouvert depuis un bouton "Nouvel abonnement" ou depuis le bouton "Modifier" d'un abonnement existant.
@@ -75,24 +73,40 @@ L'application SHALL fournir un dialogue modal pour la création et l'édition de
 - **AND** le dialogue se ferme
 - **AND** la liste est rafraîchie
 
-#### Scenario: Fermeture du dialogue
+#### Scenario: Fermeture du dialogue sans modification
 
 - **WHEN** l'utilisateur clique sur "Annuler" ou appuie sur Échap
+- **AND** aucune modification n'a été apportée au formulaire
 - **THEN** le dialogue se ferme sans sauvegarder
 - **AND** le formulaire est réinitialisé
+
+#### Scenario: Fermeture du dialogue avec modifications en cours
+
+- **WHEN** l'utilisateur clique sur "Annuler" ou appuie sur Échap
+- **AND** des modifications ont été apportées au formulaire
+- **THEN** une confirmation "Voulez-vous vraiment annuler les modifications en cours ?" est affichée
+- **AND** si l'utilisateur confirme, le dialogue se ferme sans sauvegarder
+- **AND** si l'utilisateur annule, le dialogue reste ouvert avec les modifications conservées
 
 #### Scenario: Fermeture par clic sur l'arrière-plan
 
 - **WHEN** l'utilisateur clique en dehors du dialogue
+- **AND** aucune modification n'a été apportée au formulaire
 - **THEN** le dialogue se ferme sans sauvegarder
+
+#### Scenario: Clic sur l'arrière-plan avec modifications en cours
+
+- **WHEN** l'utilisateur clique en dehors du dialogue
+- **AND** des modifications ont été apportées au formulaire
+- **THEN** le dialogue ne se ferme pas
+- **AND** les modifications en cours sont conservées
 
 ### Requirement: Accessibilité du dialogue modal
 
-Le dialogue modal SHALL respecter les critères d'accessibilité : piège de focus, rôle `dialog`, `aria-modal="true"`, `aria-labelledby` sur le titre.
+L'application SHALL respecter les critères d'accessibilité pour le dialogue modal.
 
-#### Scenario: Piège de focus
-
+#### Scenario: Navigation au clavier
 - **WHEN** le dialogue est ouvert
 - **THEN** le focus est piégé à l'intérieur du dialogue
-- **AND** la tabulation cyclique entre les éléments du dialogue
-- **AND** l'arrière-plan n'est pas focalisable
+- **AND** la touche Tab circule entre les éléments interactifs du dialogue
+

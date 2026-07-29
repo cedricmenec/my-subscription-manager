@@ -105,4 +105,9 @@ L'application SHALL fournir un dialogue modal pour la création et l'édition de
 
 ### Requirement: Accessibilité du dialogue modal
 
-_Non modifié — voir spec principale_
+L'application SHALL respecter les critères d'accessibilité pour le dialogue modal.
+
+#### Scenario: Navigation au clavier
+- **WHEN** le dialogue est ouvert
+- **THEN** le focus est piégé à l'intérieur du dialogue
+- **AND** la touche Tab circule entre les éléments interactifs du dialogue
