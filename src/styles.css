@@ -1699,6 +1699,348 @@ textarea:focus-visible {
   cursor: help;
 }
 
+/* ── Diagnostic Page ── */
+
+.diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.diagnostic-full-width {
+  margin-bottom: 20px;
+}
+
+.diagnostic-card {
+  border: 1px solid #d9dfdd;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.diagnostic-card-title {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: #52605d;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.diagnostic-empty {
+  color: #9aa9a5;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.diagnostic-warning {
+  margin: 8px 0 0;
+  color: #a44335;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* SyncRateGauge */
+
+.sync-gauge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sync-gauge-bar-bg {
+  flex: 1;
+  height: 20px;
+  border-radius: 10px;
+  background: #e8ebea;
+  overflow: hidden;
+}
+
+.sync-gauge-bar-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+  min-width: 4px;
+}
+
+.sync-gauge-label {
+  color: #52605d;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* CalculationTimeline */
+
+.diagnostic-timeline {
+  max-height: 400px;
+  overflow-y: auto;
+  background: #f7f8f8;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.diagnostic-timeline-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  border-bottom: 1px solid #e8ebea;
+  flex-wrap: wrap;
+}
+
+.diagnostic-timeline-item:last-child {
+  border-bottom: none;
+}
+
+.diagnostic-timeline-item-slow {
+  background: #fff4f0;
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin: 0 -8px;
+}
+
+.diagnostic-timeline-item-idempotent {
+  opacity: 0.7;
+}
+
+.diagnostic-timeline-time {
+  color: #52605d;
+  font-size: 0.72rem;
+  font-family: monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 65px;
+}
+
+.diagnostic-timeline-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.badge-completed {
+  background: #d4ede6;
+  color: #0b5e4e;
+}
+
+.badge-failed {
+  background: #fce8e4;
+  color: #a44335;
+}
+
+.badge-skipped {
+  background: #f0f2f1;
+  color: #6b7d79;
+}
+
+.badge-write {
+  background: #e0e8ff;
+  color: #334e8a;
+}
+
+.diagnostic-timeline-trigger {
+  color: #17211f;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.diagnostic-timeline-duration {
+  color: #52605d;
+  flex-shrink: 0;
+}
+
+.diagnostic-timeline-detail {
+  color: #6b7d79;
+  font-size: 0.72rem;
+  width: 100%;
+  padding-left: 73px;
+}
+
+/* WriteImpact */
+
+.write-impact-stats {
+  display: flex;
+  gap: 16px;
+}
+
+.write-impact-stat {
+  text-align: center;
+  flex: 1;
+  border: 1px solid #e8ebea;
+  border-radius: 6px;
+  padding: 12px 8px;
+}
+
+.write-impact-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 750;
+  color: #17211f;
+}
+
+.write-impact-idempotent {
+  color: #0b5e4e;
+  font-size: 1.2rem;
+}
+
+.write-impact-label {
+  display: block;
+  margin-top: 4px;
+  color: #52605d;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.write-impact-trend {
+  margin: 8px 0 0;
+  color: #6b7d79;
+  font-size: 0.78rem;
+}
+
+.write-impact-details {
+  margin-top: 8px;
+  font-size: 0.78rem;
+}
+
+.write-impact-details summary {
+  color: #52605d;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.write-impact-history {
+  margin: 8px 0 0;
+  padding-left: 16px;
+  color: #6b7d79;
+  list-style: none;
+}
+
+.write-impact-history li {
+  padding: 2px 0;
+}
+
+.write-impact-history-idempotent {
+  color: #0b5e4e;
+}
+
+/* CircuitBreakerStatus */
+
+.circuit-breaker-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.circuit-breaker-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.circuit-breaker-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.circuit-breaker-dot-green {
+  background: #1b8a73;
+  box-shadow: 0 0 4px rgba(27, 138, 115, 0.4);
+}
+
+.circuit-breaker-dot-red {
+  background: #c94d3a;
+  box-shadow: 0 0 4px rgba(201, 77, 58, 0.4);
+  animation: pulse-red 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.circuit-breaker-active {
+  display: flex;
+  align-items: center;
+  color: #a44335;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.circuit-breaker-inactive {
+  display: flex;
+  align-items: center;
+  color: #1b8a73;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.circuit-breaker-details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.circuit-breaker-details dt {
+  color: #52605d;
+  font-weight: 600;
+}
+
+.circuit-breaker-details dd {
+  margin: 0;
+  color: #17211f;
+}
+
+/* InstanceIdentity */
+
+.instance-info-details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.instance-info-details dt {
+  color: #52605d;
+  font-weight: 600;
+}
+
+.instance-info-details dd {
+  margin: 0;
+  color: #17211f;
+}
+
+.instance-info-details code {
+  background: #f0f2f1;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 640px) {
+  .diagnostic-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .write-impact-stats {
+    flex-direction: column;
+  }
+}
+
 .exclusion-badge {
   background: #fde7e4;
   color: #9a3f32;

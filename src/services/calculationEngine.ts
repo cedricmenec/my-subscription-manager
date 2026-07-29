@@ -1,5 +1,5 @@
 import { db, type DiagnosticLog, type SubscriptionDatabase } from '../data/db'
-import { materializeProjectedPayments } from './payments'
+import { materializeProjectedPaymentsWithStats } from './payments'
 
 export type CalculationTriggerType = 'mutation' | 'startup' | 'interval' | 'stale-check' | 'manual'
 export type CalculationStatus = 'ok' | 'error' | 'skipped-debounced'
@@ -29,6 +29,9 @@ export interface CalculationEngineOptions {
   registry?: CalculationDefinition[]
   logger?: CalculationLogger
   database?: SubscriptionDatabase
+  circuitBreakerThreshold?: number
+  circuitBreakerWindowMs?: number
+  circuitBreakerBlockMs?: number
 }
 
 export interface CalculationRunSummary {
@@ -46,6 +49,23 @@ export interface CalculationRunSummary {
   }>
 }
 
+export interface CircuitBreakerState {
+  active: boolean
+  threshold: number
+  windowMs: number
+  blockMs: number
+  blockedUntil: number | null
+  blockedUntilDate: string | null
+  recentMutationCount: number
+  mutationTimestamps: number[]
+}
+
+export interface InstanceInfo {
+  id: string
+  startedAt: Date
+  runCount: number
+}
+
 interface QueuedRun {
   trigger: CalculationTriggerType
   selectedCalculatorIds?: string[]
@@ -56,9 +76,14 @@ export interface CalculationEngine {
   run: (calculatorIds?: string[], trigger?: CalculationTriggerType) => Promise<CalculationRunSummary>
   getRegistry: () => CalculationDefinition[]
   getDebugGraph: () => string[]
+  getCircuitBreakerState: () => CircuitBreakerState
+  getInstanceInfo: () => InstanceInfo
   start: () => void
   stop: () => void
 }
+
+const INSTANCE_ID = `inst-${crypto.randomUUID().slice(0, 8)}`
+let instanceRunCount = 0
 
 export function createCalculationEngine(options: CalculationEngineOptions = {}): CalculationEngine {
   const database = options.database ?? db
@@ -67,6 +92,9 @@ export function createCalculationEngine(options: CalculationEngineOptions = {}):
   const staleCheckMs = options.staleCheckMs ?? 60 * 60 * 1000
   const logger = options.logger ?? createDiagnosticLogger(database)
   const registry = options.registry ?? createDefaultRegistry()
+  const circuitBreakerThreshold = options.circuitBreakerThreshold ?? 5
+  const circuitBreakerWindowMs = options.circuitBreakerWindowMs ?? 10_000
+  const circuitBreakerBlockMs = options.circuitBreakerBlockMs ?? 30_000
   const registryIds = new Set(registry.map(definition => definition.id))
 
   for (const definition of registry) {
@@ -84,6 +112,9 @@ export function createCalculationEngine(options: CalculationEngineOptions = {}):
   let intervalTimer: ReturnType<typeof setInterval> | undefined
   let mutationSuppressionUntil = 0
   let cleanupHooks: Array<() => void> = []
+  // Circuit breaker state
+  let mutationTimestamps: number[] = []
+  let circuitBreakerBlockedUntil = 0
 
   function getDebugGraph(): string[] {
     return registry.map(definition => `${definition.id} -> ${definition.dependsOn.join(', ') || '(none)'}`)
@@ -93,7 +124,92 @@ export function createCalculationEngine(options: CalculationEngineOptions = {}):
     return [...registry]
   }
 
+  function getCircuitBreakerState(): CircuitBreakerState {
+    const now = Date.now()
+    // Prune old timestamps
+    const cutoff = now - circuitBreakerWindowMs
+    mutationTimestamps = mutationTimestamps.filter(t => t >= cutoff)
+
+    return {
+      active: now < circuitBreakerBlockedUntil,
+      threshold: circuitBreakerThreshold,
+      windowMs: circuitBreakerWindowMs,
+      blockMs: circuitBreakerBlockMs,
+      blockedUntil: circuitBreakerBlockedUntil > now ? circuitBreakerBlockedUntil : null,
+      blockedUntilDate: circuitBreakerBlockedUntil > now
+        ? new Date(circuitBreakerBlockedUntil).toISOString()
+        : null,
+      recentMutationCount: mutationTimestamps.length,
+      mutationTimestamps: [...mutationTimestamps],
+    }
+  }
+
+  function getInstanceInfo(): InstanceInfo {
+    return {
+      id: INSTANCE_ID,
+      startedAt: new Date(),
+      runCount: instanceRunCount,
+    }
+  }
+
+  function checkCircuitBreaker(): boolean {
+    const now = Date.now()
+
+    // If already blocked, check if expired
+    if (now < circuitBreakerBlockedUntil) {
+      return true // blocked
+    }
+
+    // Reset block if expired
+    if (circuitBreakerBlockedUntil > 0) {
+      circuitBreakerBlockedUntil = 0
+    }
+
+    // Prune old timestamps outside the window
+    const cutoff = now - circuitBreakerWindowMs
+    mutationTimestamps = mutationTimestamps.filter(t => t >= cutoff)
+
+    return false // not blocked
+  }
+
+  function recordMutationTrigger(): void {
+    const now = Date.now()
+    mutationTimestamps.push(now)
+
+    // Prune old timestamps
+    const cutoff = now - circuitBreakerWindowMs
+    mutationTimestamps = mutationTimestamps.filter(t => t >= cutoff)
+
+    // Check if threshold exceeded
+    if (mutationTimestamps.length >= circuitBreakerThreshold) {
+      circuitBreakerBlockedUntil = now + circuitBreakerBlockMs
+      mutationTimestamps = [] // reset after triggering
+
+      void logger.log({
+        timestamp: new Date(),
+        category: 'circuit-breaker',
+        message: JSON.stringify({
+          event: 'triggered',
+          threshold: circuitBreakerThreshold,
+          windowMs: circuitBreakerWindowMs,
+          blockMs: circuitBreakerBlockMs,
+          blockedUntil: new Date(circuitBreakerBlockedUntil).toISOString(),
+          instanceId: INSTANCE_ID,
+        }),
+      })
+    }
+  }
+
   function scheduleRun(trigger: CalculationTriggerType, selectedCalculatorIds?: string[]): void {
+    // Circuit breaker check: only block mutation triggers
+    if (trigger === 'mutation') {
+      const blocked = checkCircuitBreaker()
+      if (blocked) {
+        return
+      }
+      recordMutationTrigger()
+    }
+
     if (isRunning) {
       pendingRun = { trigger, selectedCalculatorIds, runId: createRunId() }
       return
@@ -128,7 +244,8 @@ export function createCalculationEngine(options: CalculationEngineOptions = {}):
     }
 
     isRunning = true
-    mutationSuppressionUntil = Date.now() + 1000
+    mutationSuppressionUntil = Date.now() + 5000
+    instanceRunCount++
     const startedAt = new Date()
     const selected = queuedRun.selectedCalculatorIds ?? registry.map(definition => definition.id)
     const orderedIds = resolveExecutionOrder(selected)
@@ -170,7 +287,10 @@ export function createCalculationEngine(options: CalculationEngineOptions = {}):
       await logger.log({
         timestamp: new Date(),
         category: 'calc-engine',
-        message: JSON.stringify(summary),
+        message: JSON.stringify({
+          ...summary,
+          instanceId: INSTANCE_ID,
+        }),
       })
 
       isRunning = false
@@ -192,6 +312,7 @@ export function createCalculationEngine(options: CalculationEngineOptions = {}):
         category: 'calc-engine',
         message: JSON.stringify({
           ...summary,
+          instanceId: INSTANCE_ID,
           error: error instanceof Error ? error.message : String(error),
         }),
       })
@@ -325,6 +446,8 @@ export function createCalculationEngine(options: CalculationEngineOptions = {}):
     run,
     getRegistry,
     getDebugGraph,
+    getCircuitBreakerState,
+    getInstanceInfo,
     start,
     stop,
   }
@@ -336,7 +459,19 @@ function createDefaultRegistry(): CalculationDefinition[] {
       id: 'projected-payments',
       dependsOn: [],
       run: async context => {
-        await materializeProjectedPayments({ database: context.database })
+        const result = await materializeProjectedPaymentsWithStats({ database: context.database })
+        context.logger.log({
+          timestamp: new Date(),
+          category: 'calc-engine',
+          message: JSON.stringify({
+            event: 'projected-payments-result',
+            runId: context.runId,
+            instanceId: INSTANCE_ID,
+            deleteCount: result.deleteCount,
+            createCount: result.createCount,
+            totalPayments: result.payments.length,
+          }),
+        })
       },
     },
   ]

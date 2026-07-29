@@ -37,6 +37,7 @@ import SubscriptionsPage from './pages/SubscriptionsPage'
 import PaymentsPage from './pages/PaymentsPage'
 import SettingsPage from './pages/SettingsPage'
 import DataPage from './pages/DataPage'
+import DiagnosticPage from './pages/DiagnosticPage'
 
 type OperationStatus =
   | 'aucune-operation'
@@ -133,6 +134,7 @@ function App() {
       payments: '/payments',
       settings: '/settings',
       data: '/data',
+      diagnostic: '/diagnostic',
     }
     window.location.hash = hashMap[page]
   }, [])
@@ -148,6 +150,8 @@ function App() {
         setCurrentPage('settings')
       } else if (hash.startsWith('/data')) {
         setCurrentPage('data')
+      } else if (hash.startsWith('/diagnostic')) {
+        setCurrentPage('diagnostic')
       } else {
         setCurrentPage('dashboard')
       }
@@ -541,6 +545,9 @@ function App() {
               void refreshFinance()
             }}
           />
+        )}
+        {currentPage === 'diagnostic' && (
+          <DiagnosticPage calculationEngine={calculationEngine} />
         )}
       </main>
     </div>

@@ -4,6 +4,7 @@ import { createSubscription } from './subscriptions'
 import {
   listPayments,
   materializeProjectedPayments,
+  materializeProjectedPaymentsWithStats,
   updatePaymentStatus,
 } from './payments'
 
@@ -48,7 +49,7 @@ describe('payments service', () => {
     )
 
     expect(firstRun).toHaveLength(2)
-    // Second run purges and recreates — still 2 total payments, no duplicates
+    // Second run is idempotent — no new writes, still 2 total payments
     expect(secondRun).toHaveLength(2)
     expect(await listPayments({}, testDb)).toHaveLength(2)
 
@@ -191,6 +192,53 @@ describe('payments service', () => {
 
     expect(manualPayments).toHaveLength(1)
     expect(generatedPayments.length).toBeGreaterThanOrEqual(1)
+
+    testDb.close()
+  })
+
+  it('est idempotent — ne génère pas d\'écritures si les projections sont identiques', async () => {
+    const dbName = `payments-idempotent-db-${crypto.randomUUID()}`
+    createdDbNames.push(dbName)
+
+    const testDb = new SubscriptionDatabase({ name: dbName, skipCloud: true })
+    await testDb.open()
+
+    await createSubscription(
+      {
+        name: 'Disney+',
+        status: 'ACTIVE',
+        renewalMode: 'AUTOMATIC',
+        currentPrice: 10.99,
+        currency: 'EUR',
+        billingIntervalUnit: 'MONTH',
+        billingIntervalCount: 1,
+        nextChargeDate: '2026-08-15',
+      },
+      testDb,
+    )
+
+    // First run: creates projections
+    const firstResult = await materializeProjectedPaymentsWithStats(
+      { referenceDate: '2026-07-29', horizonDays: 30, database: testDb },
+    )
+    expect(firstResult.createCount).toBeGreaterThan(0)
+
+    // Second run: no changes, should be idempotent
+    const secondResult = await materializeProjectedPaymentsWithStats(
+      { referenceDate: '2026-07-29', horizonDays: 30, database: testDb },
+    )
+    expect(secondResult.deleteCount).toBe(0)
+    expect(secondResult.createCount).toBe(0)
+
+    // Third run: still no changes
+    const thirdResult = await materializeProjectedPaymentsWithStats(
+      { referenceDate: '2026-07-29', horizonDays: 30, database: testDb },
+    )
+    expect(thirdResult.deleteCount).toBe(0)
+    expect(thirdResult.createCount).toBe(0)
+
+    // Verify total payments still correct
+    expect(await listPayments({}, testDb)).toHaveLength(firstResult.payments.length)
 
     testDb.close()
   })

@@ -1,6 +1,6 @@
 import type { ConnectedIdentity } from '../services/auth'
 
-export type AppPage = 'dashboard' | 'subscriptions' | 'payments' | 'settings' | 'data'
+export type AppPage = 'dashboard' | 'subscriptions' | 'payments' | 'settings' | 'data' | 'diagnostic'
 
 interface TopBarProps {
   currentPage: AppPage
@@ -57,6 +57,13 @@ export default function TopBar({ currentPage, onNavigate, onOpenDiagnostic, iden
           onClick={() => onNavigate('data')}
         >
           📦 Données
+        </button>
+        <button
+          type="button"
+          className={`topbar-nav-link${currentPage === 'diagnostic' ? ' topbar-nav-link-active' : ''}`}
+          onClick={() => onNavigate('diagnostic')}
+        >
+          🔬 Diagnostic
         </button>
       </nav>
       <div className="topbar-actions">

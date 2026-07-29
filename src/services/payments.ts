@@ -18,6 +18,12 @@ function createEntityId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`
 }
 
+export interface MaterializationResult {
+  payments: Payment[]
+  deleteCount: number
+  createCount: number
+}
+
 export async function materializeProjectedPayments(
   options: {
     horizonDays?: number
@@ -25,12 +31,25 @@ export async function materializeProjectedPayments(
     database?: SubscriptionDatabase
   } = {},
 ): Promise<Payment[]> {
+  const result = await materializeProjectedPaymentsWithStats(options)
+  return result.payments
+}
+
+export async function materializeProjectedPaymentsWithStats(
+  options: {
+    horizonDays?: number
+    referenceDate?: string
+    database?: SubscriptionDatabase
+  } = {},
+): Promise<MaterializationResult> {
   const database = options.database ?? db
   const referenceDate = options.referenceDate ?? todayCivilDate()
   const horizonDays = options.horizonDays ?? 90
   const windowEnd = addDaysToCivilDate(referenceDate, horizonDays)
   const now = new Date()
   const createdPayments: Payment[] = []
+  let deleteCount = 0
+  let createCount = 0
 
   try {
     const subscriptions = await database.subscriptions.toArray()
@@ -41,20 +60,12 @@ export async function materializeProjectedPayments(
           continue
         }
 
-        // Purge orphaned GENERATED payments for this subscription before projecting.
-        // This ensures that when a subscription's date or amount changes, the old
-        // projected payment is removed and only the new projection persists.
+        // Load existing GENERATED payments for this subscription
         const existingGenerated = await database.payments
           .where('subscriptionId')
           .equals(subscription.id)
           .and(payment => payment.source === 'GENERATED')
           .toArray()
-
-        for (const orphan of existingGenerated) {
-          if (orphan.id) {
-            await database.payments.delete(orphan.id)
-          }
-        }
 
         let projected: ReturnType<typeof projectSubscriptionPayments>
 
@@ -66,6 +77,47 @@ export async function materializeProjectedPayments(
           continue
         }
 
+        // Compare existing with projected to determine if we need to write
+        const existingKeys = new Set(
+          existingGenerated.map(p =>
+            `${p.scheduledDate}|${p.amount.amount}|${p.amount.currency}|${p.status}`,
+          ),
+        )
+        const projectedKeys = new Set(
+          projected.map(c =>
+            `${c.scheduledDate}|${c.amount.amount}|${c.amount.currency}|${c.status}`,
+          ),
+        )
+
+        // If both sets are identical, skip writes entirely for this subscription
+        if (existingKeys.size === projectedKeys.size) {
+          let identical = true
+          for (const key of existingKeys) {
+            if (!projectedKeys.has(key)) {
+              identical = false
+              break
+            }
+          }
+          if (identical) {
+            // Track existing payments as "created" (they already exist)
+            for (const p of existingGenerated) {
+              if (p.id) {
+                createdPayments.push(p)
+              }
+            }
+            continue
+          }
+        }
+
+        // Delete existing GENERATED payments that no longer match
+        for (const orphan of existingGenerated) {
+          if (orphan.id) {
+            await database.payments.delete(orphan.id)
+            deleteCount++
+          }
+        }
+
+        // Create new projections
         for (const candidate of projected) {
           const payment: Payment = {
             id: createEntityId('pym'),
@@ -82,6 +134,7 @@ export async function materializeProjectedPayments(
           try {
             await database.payments.put(payment)
             createdPayments.push(payment)
+            createCount++
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error)
             console.error(
@@ -96,7 +149,7 @@ export async function materializeProjectedPayments(
     console.error('materializeProjectedPayments failed', error)
   }
 
-  return createdPayments
+  return { payments: createdPayments, deleteCount, createCount }
 }
 
 export async function listPayments(
