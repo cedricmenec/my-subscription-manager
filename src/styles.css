@@ -1846,6 +1846,23 @@ textarea:focus-visible {
   color: #334e8a;
 }
 
+.badge-renewal {
+  background: #fef3d8;
+  color: #8a6d00;
+}
+
+.badge-error {
+  background: #fce8e4;
+  color: #a44335;
+}
+
+.diagnostic-timeline-item-error {
+  background: #fff0ee;
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin: 0 -8px;
+}
+
 .diagnostic-timeline-trigger {
   color: #17211f;
   font-weight: 600;
