@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { type Subscription, type SubscriptionStatus, type RenewalMode } from '../data/db'
 import { type SubscriptionSort, type SortDirection, type SubscriptionFilters, computeSubscriptionCompletion } from '../services/subscriptions'
 import { type CompactColumn } from '../components/SubscriptionCompactList'
@@ -74,7 +74,14 @@ export default function SubscriptionsPage({
   const [formState, setFormState] = useState<SubscriptionFormState>(EMPTY_FORM)
 
   // Local filters
+  // searchDraft is the immediate input; search is the debounced effective value
+  const [searchDraft, setSearchDraft] = useState('')
   const [search, setSearch] = useState('')
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchDraft), 300)
+    return () => clearTimeout(timer)
+  }, [searchDraft])
+
   const [dateMin, setDateMin] = useState('')
   const [dateMax, setDateMax] = useState('')
   const [amountMin, setAmountMin] = useState('')
@@ -104,6 +111,36 @@ export default function SubscriptionsPage({
   // Client-side filtering (since we already have the data)
   const filteredSubscriptions = useMemo(() => {
     let result = [...subscriptions]
+
+    // Search text — case-insensitive on name, provider, notes
+    if (filters.search) {
+      const q = filters.search.toLowerCase()
+      result = result.filter(s =>
+        (s.name ?? '').toLowerCase().includes(q) ||
+        (s.provider ?? '').toLowerCase().includes(q) ||
+        (s.notes ?? '').toLowerCase().includes(q),
+      )
+    }
+
+    // Status filter
+    if (filters.status && filters.status !== 'ALL') {
+      result = result.filter(s => s.status === filters.status)
+    }
+
+    // Category filter
+    if (filters.categoryId && filters.categoryId !== 'ALL') {
+      result = result.filter(s => s.categoryId === filters.categoryId)
+    }
+
+    // Renewal mode filter
+    if (filters.renewalMode && filters.renewalMode !== 'ALL') {
+      result = result.filter(s => s.renewalMode === filters.renewalMode)
+    }
+
+    // Only incomplete filter
+    if (filters.onlyIncomplete) {
+      result = result.filter(s => !computeSubscriptionCompletion(s).isComplete)
+    }
 
     // Apply filters that are not already handled by the backend
     if (filters.dateMin) {
@@ -266,8 +303,8 @@ export default function SubscriptionsPage({
 
       {/* Advanced search */}
       <AdvancedSearchBar
-        search={search}
-        onSearchChange={setSearch}
+        search={searchDraft}
+        onSearchChange={setSearchDraft}
         dateMin={dateMin}
         onDateMinChange={setDateMin}
         dateMax={dateMax}
