@@ -64,7 +64,10 @@ export interface Subscription extends SyncedEntity {
   startDate?: string
   nextChargeDate?: string
   nextRenewalDate?: string
-  renewalStartDate?: string
+  subscriptionDate?: string
+  renewalPeriodStartDate?: string
+  notifyBeforeRenewal?: boolean
+  notifyBeforeRenewalDays?: number
   commitmentStartDate?: string
   pauseUntil?: string
   pauseStartDate?: string
@@ -466,6 +469,49 @@ export class SubscriptionDatabase extends Dexie {
         calculationState: '&key, updatedAt',
         importPreview: '&id, rowNumber, status',
         drafts: '&id, entityType, updatedAt',
+      })
+      .upgrade(async tx => {
+        await tx
+          .table('subscriptions')
+          .toCollection()
+          .modify((subscription: Record<string, unknown>) => {
+            // Copier renewalStartDate → subscriptionDate
+            if (subscription.renewalStartDate !== undefined) {
+              subscription.subscriptionDate = subscription.renewalStartDate
+            }
+
+            // Initialiser renewalPeriodStartDate avec subscriptionDate si présent
+            if (subscription.subscriptionDate !== undefined && subscription.renewalPeriodStartDate === undefined) {
+              subscription.renewalPeriodStartDate = subscription.subscriptionDate
+            }
+
+            // Ajouter notifyBeforeRenewal et notifyBeforeRenewalDays (undefined en attendant le calculateur)
+            if (subscription.notifyBeforeRenewal === undefined) {
+              subscription.notifyBeforeRenewal = undefined
+            }
+            if (subscription.notifyBeforeRenewalDays === undefined) {
+              subscription.notifyBeforeRenewalDays = undefined
+            }
+
+            // Supprimer le champ legacy
+            delete subscription.renewalStartDate
+
+            subscription.schemaVersion = 8
+          })
+
+        await tx
+          .table('payments')
+          .toCollection()
+          .modify((payment: Record<string, unknown>) => {
+            payment.schemaVersion = 8
+          })
+
+        await tx
+          .table('settings')
+          .toCollection()
+          .modify((settings: Record<string, unknown>) => {
+            settings.schemaVersion = 8
+          })
       })
 
     if (!options.skipCloud) {

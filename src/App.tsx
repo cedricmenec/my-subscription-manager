@@ -114,7 +114,6 @@ function App() {
   const [feedback, setFeedback] = useState('')
   const [networkOnline, setNetworkOnline] = useState<boolean>(navigator.onLine)
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
-  const [payments, setPayments] = useState<Payment[]>([])
   const [summary, setSummary] = useState<FinancialSummaryState>(EMPTY_SUMMARY)
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([])
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -122,6 +121,7 @@ function App() {
 
   const calculationEngine = useMemo(() => createCalculationEngine({ debounceMs: 250 }), [])
   const livePayments = useLiveQuery(() => db.payments.orderBy('scheduledDate').toArray(), [])
+  const payments = useMemo(() => livePayments ?? [], [livePayments])
 
   const appSyncStatus = useMemo(() => mapSyncStateToAppStatus(syncState), [syncState])
 
@@ -200,12 +200,6 @@ function App() {
     calculationEngine.start()
     return () => calculationEngine.stop()
   }, [calculationEngine])
-
-  useEffect(() => {
-    if (livePayments) {
-      setPayments(livePayments)
-    }
-  }, [livePayments])
 
   useEffect(() => {
     async function loadContextData() {

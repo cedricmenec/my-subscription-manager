@@ -26,6 +26,7 @@ export default function SyncRateGauge() {
     const recent = logs.filter(
       entry => new Date(entry.timestamp).getTime() >= cutoff,
     )
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSyncCount(recent.length)
   }, [logs])
 

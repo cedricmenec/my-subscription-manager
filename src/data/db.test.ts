@@ -86,7 +86,7 @@ describe('SubscriptionDatabase', () => {
     expect(migrated?.billingIntervalCount).toBe(1)
     expect(migrated?.renewalIntervalUnit).toBe('MONTH')
     expect(migrated?.renewalIntervalCount).toBe(1)
-    expect(migrated?.schemaVersion).toBe(7)
+    expect(migrated?.schemaVersion).toBe(8)
 
     upgradedDb.close()
   })
@@ -142,11 +142,11 @@ describe('SubscriptionDatabase', () => {
 
     const migratedSub = await upgradedDb.subscriptions.get('sbs-v4-test-1')
     expect(migratedSub?.currentPrice).toBe(15)
-    expect(migratedSub?.schemaVersion).toBe(7)
+    expect(migratedSub?.schemaVersion).toBe(8)
 
     const migratedPayment = await upgradedDb.payments.get('pym-v4-test-1')
     expect(migratedPayment?.amount.amount).toBe(15)
-    expect(migratedPayment?.schemaVersion).toBe(7)
+    expect(migratedPayment?.schemaVersion).toBe(8)
 
     upgradedDb.close()
   })
@@ -206,12 +206,12 @@ describe('SubscriptionDatabase', () => {
     expect(migratedSub?.currentPrice).toBe(15.00)
     expect((migratedSub as unknown as Record<string, unknown>).currentPriceMinor).toBeUndefined()
     expect((migratedSub as unknown as Record<string, unknown>).billingInterval).toBeUndefined()
-    expect(migratedSub?.schemaVersion).toBe(7)
+    expect(migratedSub?.schemaVersion).toBe(8)
 
     const migratedPayment = await upgradedDb.payments.get('pym-v5-test-1')
     expect(migratedPayment?.amount.amount).toBe(15.00)
     expect((migratedPayment?.amount as unknown as Record<string, unknown>).amountMinor).toBeUndefined()
-    expect(migratedPayment?.schemaVersion).toBe(7)
+    expect(migratedPayment?.schemaVersion).toBe(8)
 
     upgradedDb.close()
   })

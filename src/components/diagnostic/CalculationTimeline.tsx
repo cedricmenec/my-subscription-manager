@@ -37,7 +37,7 @@ export default function CalculationTimeline() {
           const isRunSummary = parsed && 'trigger' in parsed && 'status' in parsed
           const isProjectedResult = parsed && parsed.event === 'projected-payments-result'
 
-          if (isRunSummary) {
+          if (isRunSummary && parsed) {
             const trigger = String(parsed.trigger ?? '?')
             const status = String(parsed.status ?? 'unknown')
             const startedAt = parsed.startedAt ? new Date(parsed.startedAt as string) : null
@@ -46,9 +46,6 @@ export default function CalculationTimeline() {
               startedAt && finishedAt ? finishedAt.getTime() - startedAt.getTime() : null
             const entries = (parsed.entries as Array<{ calculatorId: string; status: string; durationMs: number }>) ?? []
             const isSlow = durationMs !== null && durationMs > 1000
-            const isIdempotent = entries.some(
-              e => e.calculatorId === 'projected-payments' && e.status === 'ok',
-            )
 
             const time = startedAt
               ? startedAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -75,7 +72,7 @@ export default function CalculationTimeline() {
             )
           }
 
-          if (isProjectedResult) {
+          if (isProjectedResult && parsed) {
             const deleteCount = Number(parsed.deleteCount ?? 0)
             const createCount = Number(parsed.createCount ?? 0)
             const totalWrites = deleteCount + createCount

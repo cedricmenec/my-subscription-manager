@@ -70,7 +70,8 @@ export interface UpsertSubscriptionInput extends SubscriptionFormInput {
   renewalIntervalCount?: number
   startDate?: string
   nextRenewalDate?: string
-  renewalStartDate?: string
+  subscriptionDate?: string
+  renewalPeriodStartDate?: string
   commitmentStartDate?: string
   pauseStartDate?: string
   cancellationInstructions?: string
@@ -95,17 +96,19 @@ function normalizePositiveInteger(value?: number): number | undefined {
 }
 
 export function computeNextRenewalDate(
-  renewalStartDate?: string,
+  subscriptionDate?: string,
   renewalIntervalUnit?: IntervalUnit,
   renewalIntervalCount?: number,
+  renewalPeriodStartDate?: string,
   todayReference: Date = new Date(),
 ): string | undefined {
-  if (!renewalStartDate || !renewalIntervalUnit || !renewalIntervalCount) {
+  const anchor = renewalPeriodStartDate ?? subscriptionDate
+  if (!anchor || !renewalIntervalUnit || !renewalIntervalCount) {
     return undefined
   }
 
   const today = todayCivilDate(todayReference)
-  let nextDate = renewalStartDate
+  let nextDate = anchor
 
   while (compareCivilDates(nextDate, today) < 0) {
     nextDate = addIntervalToCivilDate(nextDate, renewalIntervalUnit, renewalIntervalCount)
@@ -197,7 +200,8 @@ export async function createSubscription(
     renewalIntervalCount: input.renewalIntervalCount,
     nextChargeDate: input.nextChargeDate,
     nextRenewalDate: input.nextRenewalDate,
-    renewalStartDate: input.renewalStartDate,
+    subscriptionDate: input.subscriptionDate,
+    renewalPeriodStartDate: input.renewalPeriodStartDate,
     commitmentStartDate: input.commitmentStartDate,
     pauseStartDate: input.pauseStartDate,
     pauseUntil: input.pauseUntil,
@@ -216,9 +220,10 @@ export async function createSubscription(
     input.renewalMode === 'AUTOMATIC'
       ? input.nextRenewalDate ??
         computeNextRenewalDate(
-          input.renewalStartDate,
+          input.subscriptionDate,
           input.renewalIntervalUnit,
           input.renewalIntervalCount,
+          input.renewalPeriodStartDate,
         )
       : undefined
 
@@ -241,7 +246,8 @@ export async function createSubscription(
     startDate: cleanOptional(input.startDate),
     nextChargeDate: cleanOptional(input.nextChargeDate),
     nextRenewalDate: autoRenewalDate ?? cleanOptional(input.nextRenewalDate),
-    renewalStartDate: cleanOptional(input.renewalStartDate),
+    subscriptionDate: cleanOptional(input.subscriptionDate),
+    renewalPeriodStartDate: cleanOptional(input.renewalPeriodStartDate) ?? cleanOptional(input.subscriptionDate),
     commitmentStartDate: cleanOptional(input.commitmentStartDate),
     pauseUntil: cleanOptional(input.pauseUntil),
     pauseStartDate: cleanOptional(input.pauseStartDate),
@@ -252,7 +258,7 @@ export async function createSubscription(
     notes: cleanOptional(input.notes),
     createdAt: now,
     updatedAt: now,
-    schemaVersion: 7,
+    schemaVersion: 8,
   }
 
   await database.transaction('rw', database.subscriptions, async () => {
@@ -302,16 +308,19 @@ export async function updateSubscription(
       normalizePositiveInteger(patch.renewalIntervalCount) ?? current.renewalIntervalCount,
     startDate: cleanOptional(patch.startDate),
     nextChargeDate: cleanOptional(patch.nextChargeDate),
+    // subscriptionDate est en lecture seule : on garde la valeur existante
+    subscriptionDate: current.subscriptionDate,
+    renewalPeriodStartDate: cleanOptional(patch.renewalPeriodStartDate),
+    // nextRenewalDate est surchargé par le moteur de calcul : on recalcule ici en attendant le prochain run
     nextRenewalDate:
       patch.renewalMode === 'AUTOMATIC'
-        ? cleanOptional(patch.nextRenewalDate) ??
-          computeNextRenewalDate(
-            cleanOptional(patch.renewalStartDate) ?? current.renewalStartDate,
+        ? computeNextRenewalDate(
+            current.subscriptionDate,
             patch.renewalIntervalUnit ?? current.renewalIntervalUnit,
             normalizePositiveInteger(patch.renewalIntervalCount) ?? current.renewalIntervalCount,
+            cleanOptional(patch.renewalPeriodStartDate) ?? current.renewalPeriodStartDate,
           )
         : cleanOptional(patch.nextRenewalDate),
-    renewalStartDate: cleanOptional(patch.renewalStartDate),
     commitmentStartDate: cleanOptional(patch.commitmentStartDate),
     pauseUntil: cleanOptional(patch.pauseUntil),
     pauseStartDate: cleanOptional(patch.pauseStartDate),
@@ -321,7 +330,7 @@ export async function updateSubscription(
     cancellationInstructions: cleanOptional(patch.cancellationInstructions),
     notes: cleanOptional(patch.notes),
     updatedAt: new Date(),
-    schemaVersion: 7,
+    schemaVersion: 8,
   }
 
   const validation = validateSubscriptionInput({
@@ -337,7 +346,8 @@ export async function updateSubscription(
     renewalIntervalCount: merged.renewalIntervalCount,
     nextChargeDate: merged.nextChargeDate,
     nextRenewalDate: merged.nextRenewalDate,
-    renewalStartDate: merged.renewalStartDate,
+    subscriptionDate: merged.subscriptionDate,
+    renewalPeriodStartDate: merged.renewalPeriodStartDate,
     commitmentStartDate: merged.commitmentStartDate,
     pauseStartDate: merged.pauseStartDate,
     pauseUntil: merged.pauseUntil,
@@ -367,7 +377,8 @@ export async function updateSubscription(
       startDate: merged.startDate,
       nextChargeDate: merged.nextChargeDate,
       nextRenewalDate: merged.nextRenewalDate,
-      renewalStartDate: merged.renewalStartDate,
+      subscriptionDate: merged.subscriptionDate,
+      renewalPeriodStartDate: merged.renewalPeriodStartDate,
       commitmentStartDate: merged.commitmentStartDate,
       pauseUntil: merged.pauseUntil,
       pauseStartDate: merged.pauseStartDate,
@@ -380,7 +391,7 @@ export async function updateSubscription(
       renewalMode: merged.renewalMode,
       currentPrice: merged.currentPrice,
       updatedAt: merged.updatedAt,
-      schemaVersion: 7,
+      schemaVersion: 8,
     })
   })
 
@@ -442,7 +453,7 @@ export async function archiveSubscription(
   await database.subscriptions.update(id, {
     archivedAt: new Date(),
     updatedAt: new Date(),
-    schemaVersion: 7,
+    schemaVersion: 8,
   })
 }
 

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { createCalculationEngine, type CalculationEngine } from '../services/calculationEngine'
+import type { CalculationEngine } from '../services/calculationEngine'
 import SyncRateGauge from '../components/diagnostic/SyncRateGauge'
 import CalculationTimeline from '../components/diagnostic/CalculationTimeline'
 import WriteImpact from '../components/diagnostic/WriteImpact'
@@ -13,12 +13,10 @@ interface DiagnosticPageProps {
 export default function DiagnosticPage({ calculationEngine }: DiagnosticPageProps) {
   const cbState = useMemo(
     () => calculationEngine.getCircuitBreakerState(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [calculationEngine],
   )
   const instanceInfo = useMemo(
     () => calculationEngine.getInstanceInfo(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [calculationEngine],
   )
 

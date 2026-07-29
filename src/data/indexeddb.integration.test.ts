@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import Dexie from 'dexie'
 import { SubscriptionDatabase } from './db'
 import {
   createSubscription,
@@ -124,5 +125,98 @@ describe('IndexedDB integration', () => {
     expect(subscriptions[0].name).toBe('Claude Plus')
 
     db.close()
+  })
+})
+
+describe('IndexedDB migration v7→v8', () => {
+  it('copie renewalStartDate → subscriptionDate et ajoute les nouveaux champs', async () => {
+    const dbName = `migration-db-${crypto.randomUUID()}`
+    createdDbNames.push(dbName)
+
+    // Crée une base minimaliste v7 (raw Dexie) pour simuler l'état avant migration
+    const v7Schema = new Dexie(dbName)
+    v7Schema.version(7).stores({
+      subscriptions:
+        'id, status, categoryId, renewalMode, billingIntervalUnit, nextChargeDate, nextRenewalDate, updatedAt, archivedAt, deletedAt',
+    })
+    await v7Schema.open()
+
+    // Injecte un abonnement avec l'ancien format v7
+    const id = `sbs-${crypto.randomUUID()}`
+    const now = new Date()
+    await v7Schema.table('subscriptions').put({
+      id,
+      name: 'Migration Test',
+      status: 'ACTIVE',
+      renewalMode: 'AUTOMATIC',
+      renewalStartDate: '2025-06-15',
+      nextRenewalDate: '2026-06-15',
+      billingIntervalUnit: 'MONTH',
+      billingIntervalCount: 1,
+      renewalIntervalUnit: 'MONTH',
+      renewalIntervalCount: 1,
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 7,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+    v7Schema.close()
+
+    // Réouvre la base avec SubscriptionDatabase (migration v8 déclenchée automatiquement)
+    const newDb = new SubscriptionDatabase({
+      name: dbName,
+      skipCloud: true,
+    })
+    await newDb.open()
+
+    const sub = await newDb.subscriptions.get(id)
+    expect(sub).toBeDefined()
+    expect(sub!.subscriptionDate).toBe('2025-06-15')
+    expect(sub!.renewalPeriodStartDate).toBe('2025-06-15')
+    expect(sub!.schemaVersion).toBe(8)
+    // Le champ legacy a été supprimé
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((sub as any).renewalStartDate).toBeUndefined()
+
+    newDb.close()
+  })
+
+  it('migration gère les abonnements sans renewalStartDate', async () => {
+    const dbName = `migration-none-db-${crypto.randomUUID()}`
+    createdDbNames.push(dbName)
+
+    const v7Schema = new Dexie(dbName)
+    v7Schema.version(7).stores({
+      subscriptions:
+        'id, status, categoryId, renewalMode, billingIntervalUnit, nextChargeDate, nextRenewalDate, updatedAt, archivedAt, deletedAt',
+    })
+    await v7Schema.open()
+
+    const id = `sbs-${crypto.randomUUID()}`
+    await v7Schema.table('subscriptions').put({
+      id,
+      name: 'No Date',
+      status: 'ACTIVE',
+      renewalMode: 'MANUAL',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      schemaVersion: 7,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+    v7Schema.close()
+
+    const newDb = new SubscriptionDatabase({
+      name: dbName,
+      skipCloud: true,
+    })
+    await newDb.open()
+
+    const sub = await newDb.subscriptions.get(id)
+    expect(sub).toBeDefined()
+    expect(sub!.subscriptionDate).toBeUndefined()
+    expect(sub!.renewalPeriodStartDate).toBeUndefined()
+    expect(sub!.schemaVersion).toBe(8)
+
+    newDb.close()
   })
 })

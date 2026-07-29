@@ -31,7 +31,8 @@ export interface SubscriptionFormState {
   renewalIntervalUnit: IntervalUnit | ''
   nextChargeDate: string
   nextRenewalDate: string
-  renewalStartDate: string
+  subscriptionDate: string
+  renewalPeriodStartDate: string
   commitmentStartDate: string
   pauseStartDate: string
   pauseUntil: string
@@ -62,7 +63,8 @@ export const EMPTY_FORM: SubscriptionFormState = {
   renewalIntervalUnit: '',
   nextChargeDate: '',
   nextRenewalDate: '',
-  renewalStartDate: '',
+  subscriptionDate: '',
+  renewalPeriodStartDate: '',
   commitmentStartDate: '',
   pauseStartDate: '',
   pauseUntil: '',
@@ -104,7 +106,8 @@ export function toFormState(subscription: Subscription): SubscriptionFormState {
     renewalIntervalUnit: subscription.renewalIntervalUnit ?? '',
     nextChargeDate: subscription.nextChargeDate ?? '',
     nextRenewalDate: subscription.nextRenewalDate ?? '',
-    renewalStartDate: subscription.renewalStartDate ?? '',
+    subscriptionDate: subscription.subscriptionDate ?? '',
+    renewalPeriodStartDate: subscription.renewalPeriodStartDate ?? '',
     commitmentStartDate: subscription.commitmentStartDate ?? '',
     pauseStartDate: subscription.pauseStartDate ?? '',
     pauseUntil: subscription.pauseUntil ?? '',
@@ -287,11 +290,11 @@ export default function SubscriptionDialog({
         renewalIntervalUnit: localForm.renewalMode === 'AUTOMATIC'
           ? (localForm.renewalIntervalUnit || undefined)
           : undefined,
-        renewalStartDate: localForm.renewalMode === 'AUTOMATIC'
-          ? (localForm.renewalStartDate || undefined)
+        subscriptionDate: localForm.renewalMode === 'AUTOMATIC'
+          ? (localForm.subscriptionDate || undefined)
           : undefined,
-        nextRenewalDate: localForm.renewalMode === 'AUTOMATIC'
-          ? (localForm.nextRenewalDate || undefined)
+        renewalPeriodStartDate: localForm.renewalMode === 'AUTOMATIC'
+          ? (localForm.renewalPeriodStartDate || undefined)
           : undefined,
         startDate: localForm.startDate || undefined,
         nextChargeDate: localForm.nextChargeDate || undefined,
@@ -394,7 +397,18 @@ export default function SubscriptionDialog({
             </label>
             <label>
               Mode de renouvellement
-              <select value={localForm.renewalMode} onChange={e => updateField('renewalMode', e.target.value as RenewalMode)}>
+              <select value={localForm.renewalMode} onChange={e => {
+                const newMode = e.target.value as RenewalMode
+                updateField('renewalMode', newMode)
+                // Pré-remplir les champs de renouvellement avec les valeurs de facturation
+                if (newMode === 'AUTOMATIC' && localForm.renewalMode !== 'AUTOMATIC') {
+                  updateField('renewalIntervalCount', localForm.billingIntervalCount || '1')
+                  updateField('renewalIntervalUnit', (localForm.billingIntervalUnit || 'MONTH') as IntervalUnit | '')
+                  if (!localForm.renewalPeriodStartDate) {
+                    updateField('renewalPeriodStartDate', localForm.startDate || localForm.subscriptionDate || '')
+                  }
+                }
+              }}>
                 {RENEWAL_OPTIONS.map(m => (
                   <option key={m} value={m}>{RENEWAL_LABELS[m]}</option>
                 ))}
@@ -479,14 +493,32 @@ export default function SubscriptionDialog({
                 </select>
               </label>
               <label>
-                Début période de renouvellement
-                <input type="date" value={localForm.renewalStartDate} onChange={e => updateField('renewalStartDate', e.target.value)} />
-                <small className="field-hint">Par défaut la date d'inscription au service</small>
+                Date de souscription
+                {editingId ? (
+                  <>
+                    <div className="field-info">{localForm.subscriptionDate || 'Non renseignée'}</div>
+                    <small className="field-hint">Lecture seule après création</small>
+                  </>
+                ) : (
+                  <>
+                    <input type="date" value={localForm.subscriptionDate} onChange={e => updateField('subscriptionDate', e.target.value)} />
+                    <small className="field-hint">Date de souscription initiale</small>
+                  </>
+                )}
               </label>
               <label>
+                Début de la période en cours
+                <input type="date" value={localForm.renewalPeriodStartDate} onChange={e => updateField('renewalPeriodStartDate', e.target.value)} />
+                <small className="field-hint">Ajustable (ex. mois offert)</small>
+              </label>
+              <label className="info-field">
                 Prochain renouvellement
-                <input type="date" value={localForm.nextRenewalDate} onChange={e => updateField('nextRenewalDate', e.target.value)} />
-                <small className="field-hint">Calculé automatiquement si la date de début est renseignée</small>
+                <div className="field-info">
+                  {editingId && localForm.nextRenewalDate
+                    ? localForm.nextRenewalDate
+                    : 'Calculé automatiquement par le moteur'}
+                </div>
+                <small className="field-hint">Mise à jour automatique</small>
               </label>
             </div>
           </fieldset>

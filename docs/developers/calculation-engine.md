@@ -54,6 +54,43 @@ Le processus pour chaque abonnement :
 
 Tout s'effectue dans une transaction Dexie atomique. Seuls les paiements `GENERATED` sont supprimés — les paiements `MANUAL`, `CONFIRMED_PAID`, `IMPORTED`, etc. ne sont jamais affectés.
 
+## Calculateur next-renewal-date
+
+Le calculateur `next-renewal-date` met à jour automatiquement `nextRenewalDate` pour tous les abonnements non archivés.
+
+### Algorithme
+
+Pour chaque abonnement non archivé :
+
+1. **Règles d'arrêt** :
+   - `status = ENDED` → `nextRenewalDate = undefined`
+   - `status = CANCELLED_PENDING_END` avec `serviceEndDate < today` → `nextRenewalDate = undefined`
+
+2. **Ancre** : `renewalPeriodStartDate` (prioritaire) → `subscriptionDate` (fallback) → pas de calcul
+
+3. **Boucle** : tant que `result < today`, ajouter `renewalInterval` à l'aide de `addIntervalToCivilDate`
+
+4. **Alertes** : `computeDefaultAlertForSub` détermine les valeurs par défaut de `notifyBeforeRenewal` et `notifyBeforeRenewalDays` selon le cycle :
+   - Mensuel → `opt-in / 7j`
+   - Annuel → `opt-out / 30j`
+   - Manuel → `always / 7j`
+   - Si l'utilisateur a déjà renseigné les champs, ils sont conservés
+
+5. **Idempotence** : écriture uniquement si `nextRenewalDate`, `notifyBeforeRenewal` ou `notifyBeforeRenewalDays` diffère de la valeur stockée
+
+### Déclencheurs
+
+Le calculateur s'exécute dans tous les contextes de run :
+- **startup** : au démarrage de l'application
+- **mutation** : après modification d'un abonnement
+- **stale-check** : vérification périodique quotidienne
+- **interval** : run périodique
+- **manual** : déclenché manuellement
+
+### Journalisation
+
+Chaque exécution produit un log dans `diagnosticLogs` (catégorie `calc-engine`, événement `next-renewal-date-result`) avec le nombre d'abonnements traités, mis à jour, ignorés et en erreur.
+
 ## Validation
 
 Les tests de régression se trouvent dans src/services/calculationEngine.test.ts et src/services/payments.test.ts.

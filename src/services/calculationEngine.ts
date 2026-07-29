@@ -1,5 +1,6 @@
-import { db, type DiagnosticLog, type SubscriptionDatabase } from '../data/db'
+import { db, type DiagnosticLog, type Subscription, type SubscriptionDatabase } from '../data/db'
 import { materializeProjectedPaymentsWithStats } from './payments'
+import { addIntervalToCivilDate, compareCivilDates, todayCivilDate } from './civilDate'
 
 export type CalculationTriggerType = 'mutation' | 'startup' | 'interval' | 'stale-check' | 'manual'
 export type CalculationStatus = 'ok' | 'error' | 'skipped-debounced'
@@ -474,7 +475,173 @@ function createDefaultRegistry(): CalculationDefinition[] {
         })
       },
     },
+    {
+      id: 'next-renewal-date',
+      dependsOn: [],
+      run: async context => {
+        const database = context.database
+        const today = todayCivilDate()
+        const subscriptions = await database.subscriptions
+          .filter(sub => !sub.archivedAt)
+          .toArray()
+
+        let updatedCount = 0
+        let skippedCount = 0
+        let errorCount = 0
+
+        for (const sub of subscriptions) {
+          try {
+            const newDate = computeNextRenewalDateForSub(sub, today)
+            const { notify, notifyDays } = computeDefaultAlertForSub(sub)
+
+            const hasDateChanged = newDate !== sub.nextRenewalDate
+            const hasNotifyChanged =
+              notify !== sub.notifyBeforeRenewal ||
+              notifyDays !== sub.notifyBeforeRenewalDays
+
+            if (hasDateChanged || hasNotifyChanged) {
+              await database.subscriptions.put({
+                ...sub,
+                nextRenewalDate: newDate,
+                notifyBeforeRenewal: notify,
+                notifyBeforeRenewalDays: notifyDays,
+                updatedAt: new Date(),
+              })
+              updatedCount++
+            } else {
+              skippedCount++
+            }
+          } catch (error) {
+            errorCount++
+            context.logger.log({
+              timestamp: new Date(),
+              category: 'calc-engine',
+              message: JSON.stringify({
+                event: 'next-renewal-date-error',
+                runId: context.runId,
+                instanceId: INSTANCE_ID,
+                subscriptionId: sub.id,
+                error: error instanceof Error ? error.message : String(error),
+              }),
+            })
+          }
+        }
+
+        context.logger.log({
+          timestamp: new Date(),
+          category: 'calc-engine',
+          message: JSON.stringify({
+            event: 'next-renewal-date-result',
+            runId: context.runId,
+            instanceId: INSTANCE_ID,
+            totalProcessed: subscriptions.length,
+            updatedCount,
+            skippedCount,
+            errorCount,
+          }),
+        })
+      },
+    },
   ]
+}
+
+/**
+ * Calcule nextRenewalDate pour un abonnement selon les règles métier.
+ * - ENDED → undefined
+ * - CANCELLED_PENDING_END avec serviceEndDate dépassée → undefined
+ * - renewalMode ≠ AUTOMATIC → undefined
+ * - Ancre: renewalPeriodStartDate > subscriptionDate > undefined
+ * - Boucle while pour ajouter renewalInterval jusqu'à dépasser today
+ */
+export function computeNextRenewalDateForSub(
+  sub: Subscription,
+  today: string,
+): string | undefined {
+  // Règles d'arrêt
+  if (sub.status === 'ENDED') {
+    return undefined
+  }
+
+  if (
+    sub.status === 'CANCELLED_PENDING_END' &&
+    sub.serviceEndDate &&
+    compareCivilDates(sub.serviceEndDate, today) < 0
+  ) {
+    return undefined
+  }
+
+  // Pas de renouvellement automatique → pas de calcul
+  if (sub.renewalMode !== 'AUTOMATIC') {
+    return undefined
+  }
+
+  // Déterminer l'ancre: renewalPeriodStartDate prioritaire, subscriptionDate en fallback
+  const anchor = sub.renewalPeriodStartDate ?? sub.subscriptionDate
+  if (!anchor) {
+    return undefined
+  }
+
+  if (!sub.renewalIntervalUnit) {
+    return undefined
+  }
+
+  const count = sub.renewalIntervalCount ?? 1
+  let result = anchor
+
+  while (compareCivilDates(result, today) < 0) {
+    result = addIntervalToCivilDate(result, sub.renewalIntervalUnit, count)
+  }
+
+  return result
+}
+
+/**
+ * Détermine les valeurs par défaut de notifyBeforeRenewal et notifyBeforeRenewalDays.
+ * Si l'utilisateur a déjà renseigné ces champs, les valeurs sont conservées.
+ */
+export function computeDefaultAlertForSub(sub: Subscription): {
+  notify: boolean | undefined
+  notifyDays: number | undefined
+} {
+  // Valeurs utilisateur déjà renseignées → conserver
+  if (sub.notifyBeforeRenewal !== undefined && sub.notifyBeforeRenewalDays !== undefined) {
+    return {
+      notify: sub.notifyBeforeRenewal,
+      notifyDays: sub.notifyBeforeRenewalDays,
+    }
+  }
+
+  // Mode MANUAL → always / 7j
+  if (sub.renewalMode === 'MANUAL') {
+    return { notify: true, notifyDays: 7 }
+  }
+
+  // Si pas de cycle défini → fallback
+  if (!sub.renewalIntervalUnit || !sub.renewalIntervalCount) {
+    return { notify: true, notifyDays: 7 }
+  }
+
+  const unit = sub.renewalIntervalUnit
+  const count = sub.renewalIntervalCount
+
+  // Mensuel (ou hebdo court) → opt-in / 7j
+  if (
+    (unit === 'MONTH' && count <= 1) ||
+    (unit === 'WEEK' && count <= 4)
+  ) {
+    return { notify: true, notifyDays: 7 }
+  }
+
+  // Annuel (ou long) → opt-out / 30j
+  if (
+    unit === 'YEAR' ||
+    (unit === 'MONTH' && count >= 6)
+  ) {
+    return { notify: false, notifyDays: 30 }
+  }
+
+  // Fallback
+  return { notify: true, notifyDays: 7 }
 }
 
 function createDiagnosticLogger(database: SubscriptionDatabase): CalculationLogger {

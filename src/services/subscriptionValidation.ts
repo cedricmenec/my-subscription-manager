@@ -36,7 +36,8 @@ export interface SubscriptionFormInput {
   renewalIntervalCount?: number
   nextChargeDate?: string
   nextRenewalDate?: string
-  renewalStartDate?: string
+  subscriptionDate?: string
+  renewalPeriodStartDate?: string
   commitmentStartDate?: string
   pauseStartDate?: string
   pauseUntil?: string
@@ -136,8 +137,12 @@ export function validateSubscriptionInput(
     errors.nextRenewalDate = 'La date de prochain renouvellement est invalide (YYYY-MM-DD).'
   }
 
-  if (input.renewalStartDate && !isValidCivilDate(input.renewalStartDate)) {
-    errors.renewalStartDate = 'La date de début de renouvellement est invalide (YYYY-MM-DD).'
+  if (input.subscriptionDate && !isValidCivilDate(input.subscriptionDate)) {
+    errors.subscriptionDate = 'La date de souscription est invalide (YYYY-MM-DD).'
+  }
+
+  if (input.renewalPeriodStartDate && !isValidCivilDate(input.renewalPeriodStartDate)) {
+    errors.renewalPeriodStartDate = 'La date de début de période de renouvellement est invalide (YYYY-MM-DD).'
   }
 
   if (input.commitmentStartDate && !isValidCivilDate(input.commitmentStartDate)) {
@@ -166,6 +171,23 @@ export function validateSubscriptionInput(
 
   if (input.cancellationUrl && !isValidUrl(input.cancellationUrl)) {
     errors.cancellationUrl = 'L\'URL de résiliation est invalide.'
+  }
+
+  // Règle de cohérence nextChargeDate > nextRenewalDate
+  if (
+    input.status === 'ACTIVE' &&
+    input.renewalMode === 'AUTOMATIC' &&
+    input.nextChargeDate &&
+    input.nextRenewalDate &&
+    input.billingIntervalUnit &&
+    input.billingIntervalCount &&
+    input.renewalIntervalUnit &&
+    input.renewalIntervalCount &&
+    input.billingIntervalUnit === input.renewalIntervalUnit &&
+    input.billingIntervalCount === input.renewalIntervalCount &&
+    input.nextChargeDate > input.nextRenewalDate
+  ) {
+    errors.nextChargeDate = 'La prochaine échéance ne peut pas être après la date de renouvellement.'
   }
 
   return {
