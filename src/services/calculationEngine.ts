@@ -503,6 +503,7 @@ function createDefaultRegistry(): CalculationDefinition[] {
               await database.subscriptions.put({
                 ...sub,
                 nextRenewalDate: newDate,
+                nextChargeDate: newDate ?? sub.nextChargeDate,
                 notifyBeforeRenewal: notify,
                 notifyBeforeRenewalDays: notifyDays,
                 updatedAt: new Date(),
@@ -582,14 +583,18 @@ export function computeNextRenewalDateForSub(
   }
 
   if (!sub.renewalIntervalUnit) {
-    return undefined
+    // Fallback sur le cycle de facturation si le cycle de renouvellement n'est pas défini
+    if (!sub.billingIntervalUnit) {
+      return undefined
+    }
   }
 
-  const count = sub.renewalIntervalCount ?? 1
+  const count = sub.renewalIntervalCount ?? sub.billingIntervalCount ?? 1
+  const unit = sub.renewalIntervalUnit ?? sub.billingIntervalUnit
   let result = anchor
 
   while (compareCivilDates(result, today) < 0) {
-    result = addIntervalToCivilDate(result, sub.renewalIntervalUnit, count)
+    result = addIntervalToCivilDate(result, unit!, count)
   }
 
   return result

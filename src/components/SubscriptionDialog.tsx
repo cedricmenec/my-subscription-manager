@@ -404,9 +404,6 @@ export default function SubscriptionDialog({
                 if (newMode === 'AUTOMATIC' && localForm.renewalMode !== 'AUTOMATIC') {
                   updateField('renewalIntervalCount', localForm.billingIntervalCount || '1')
                   updateField('renewalIntervalUnit', (localForm.billingIntervalUnit || 'MONTH') as IntervalUnit | '')
-                  if (!localForm.renewalPeriodStartDate) {
-                    updateField('renewalPeriodStartDate', localForm.startDate || localForm.subscriptionDate || '')
-                  }
                 }
               }}>
                 {RENEWAL_OPTIONS.map(m => (

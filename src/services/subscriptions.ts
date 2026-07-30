@@ -103,10 +103,17 @@ export function computeNextRenewalDate(
   renewalIntervalUnit?: IntervalUnit,
   renewalIntervalCount?: number,
   renewalPeriodStartDate?: string,
+  billingIntervalUnit?: IntervalUnit,
+  billingIntervalCount?: number,
   todayReference: Date = new Date(),
 ): string | undefined {
   const anchor = renewalPeriodStartDate ?? subscriptionDate
-  if (!anchor || !renewalIntervalUnit || !renewalIntervalCount) {
+  if (!anchor) {
+    return undefined
+  }
+  const unit = renewalIntervalUnit ?? billingIntervalUnit
+  const count = renewalIntervalCount ?? billingIntervalCount ?? 1
+  if (!unit) {
     return undefined
   }
 
@@ -114,7 +121,7 @@ export function computeNextRenewalDate(
   let nextDate = anchor
 
   while (compareCivilDates(nextDate, today) < 0) {
-    nextDate = addIntervalToCivilDate(nextDate, renewalIntervalUnit, renewalIntervalCount)
+    nextDate = addIntervalToCivilDate(nextDate, unit, count)
   }
 
   return nextDate
@@ -227,6 +234,8 @@ export async function createSubscription(
           input.renewalIntervalUnit,
           input.renewalIntervalCount,
           input.renewalPeriodStartDate,
+          input.billingIntervalUnit,
+          input.billingIntervalCount,
         )
       : undefined
 
@@ -289,6 +298,21 @@ export async function updateSubscription(
     })
   }
 
+  const nextRenewalDate =
+    patch.renewalMode === 'AUTOMATIC'
+      ? computeNextRenewalDate(
+          cleanOptional(patch.subscriptionDate) ?? current.subscriptionDate,
+          patch.renewalIntervalUnit ?? current.renewalIntervalUnit,
+          normalizePositiveInteger(patch.renewalIntervalCount) ?? current.renewalIntervalCount,
+          cleanOptional(patch.renewalPeriodStartDate) ?? current.renewalPeriodStartDate,
+          current.billingIntervalUnit,
+          current.billingIntervalCount,
+        )
+      : cleanOptional(patch.nextRenewalDate)
+  const nextChargeDate = patch.renewalMode === 'AUTOMATIC'
+    ? (nextRenewalDate ?? cleanOptional(patch.nextChargeDate))
+    : cleanOptional(patch.nextChargeDate)
+
   const merged: Subscription = {
     ...current,
     ...patch,
@@ -310,20 +334,11 @@ export async function updateSubscription(
     renewalIntervalCount:
       normalizePositiveInteger(patch.renewalIntervalCount) ?? current.renewalIntervalCount,
     startDate: cleanOptional(patch.startDate),
-    nextChargeDate: cleanOptional(patch.nextChargeDate),
+    nextChargeDate,
     // subscriptionDate rendue modifiable : accepter la valeur du formulaire
     subscriptionDate: cleanOptional(patch.subscriptionDate) ?? current.subscriptionDate,
     renewalPeriodStartDate: cleanOptional(patch.renewalPeriodStartDate),
-    // nextRenewalDate est surchargé par le moteur de calcul : on recalcule ici en attendant le prochain run
-    nextRenewalDate:
-      patch.renewalMode === 'AUTOMATIC'
-        ? computeNextRenewalDate(
-            cleanOptional(patch.subscriptionDate) ?? current.subscriptionDate,
-            patch.renewalIntervalUnit ?? current.renewalIntervalUnit,
-            normalizePositiveInteger(patch.renewalIntervalCount) ?? current.renewalIntervalCount,
-            cleanOptional(patch.renewalPeriodStartDate) ?? current.renewalPeriodStartDate,
-          )
-        : cleanOptional(patch.nextRenewalDate),
+    nextRenewalDate,
     commitmentStartDate: cleanOptional(patch.commitmentStartDate),
     pauseUntil: cleanOptional(patch.pauseUntil),
     pauseStartDate: cleanOptional(patch.pauseStartDate),
@@ -378,8 +393,8 @@ export async function updateSubscription(
       renewalIntervalUnit: merged.renewalIntervalUnit,
       renewalIntervalCount: merged.renewalIntervalCount,
       startDate: merged.startDate,
-      nextChargeDate: merged.nextChargeDate,
-      nextRenewalDate: merged.nextRenewalDate,
+      nextChargeDate: nextChargeDate,
+      nextRenewalDate: nextRenewalDate,
       subscriptionDate: merged.subscriptionDate,
       renewalPeriodStartDate: merged.renewalPeriodStartDate,
       commitmentStartDate: merged.commitmentStartDate,
