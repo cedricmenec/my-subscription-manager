@@ -219,6 +219,14 @@ export default function SubscriptionDialog({
     return () => clearTimeout(timer)
   }, [saveSuccess])
 
+  // Synchroniser localForm avec formState quand le parent change d'abonnement
+  // (nécessaire car key="subscription-dialog" ne remonte plus le composant)
+  useEffect(() => {
+    setLocalForm(formState)
+    initialFormRef.current = formState
+    setFormErrors({})
+  }, [formState])
+
   useEffect(() => {
     const dialog = dialogRef.current
     if (!dialog) return
