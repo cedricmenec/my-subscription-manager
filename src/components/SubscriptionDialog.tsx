@@ -221,11 +221,13 @@ export default function SubscriptionDialog({
 
   // Synchroniser localForm avec formState quand le parent change d'abonnement
   // (nécessaire car key="subscription-dialog" ne remonte plus le composant)
+  /* eslint-disable react-hooks/set-state-in-effect -- formState réinitialise explicitement le brouillon édité */
   useEffect(() => {
     setLocalForm(formState)
     initialFormRef.current = formState
     setFormErrors({})
   }, [formState])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     const dialog = dialogRef.current

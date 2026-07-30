@@ -196,6 +196,114 @@ describe('payments service', () => {
     testDb.close()
   })
 
+  it('préserve un paiement GENERATED confirmé et évite un doublon à sa date', async () => {
+    const dbName = `payments-preserve-confirmed-db-${crypto.randomUUID()}`
+    createdDbNames.push(dbName)
+
+    const testDb = new SubscriptionDatabase({ name: dbName, skipCloud: true })
+    await testDb.open()
+
+    await createSubscription(
+      {
+        name: 'Service confirmé',
+        status: 'ACTIVE',
+        renewalMode: 'AUTOMATIC',
+        currentPrice: 20,
+        currency: 'EUR',
+        billingIntervalUnit: 'MONTH',
+        billingIntervalCount: 1,
+        nextChargeDate: '2026-08-01',
+      },
+      testDb,
+    )
+
+    await materializeProjectedPayments(
+      { referenceDate: '2026-07-29', horizonDays: 40, database: testDb },
+    )
+    const [firstPayment] = await listPayments({}, testDb)
+    await updatePaymentStatus(
+      firstPayment.id,
+      { status: 'CONFIRMED_PAID', paidDate: firstPayment.scheduledDate },
+      testDb,
+    )
+
+    await materializeProjectedPayments(
+      { referenceDate: '2026-07-29', horizonDays: 40, database: testDb },
+    )
+
+    const paymentsAfterRecalculation = await listPayments({}, testDb)
+    const paymentsOnConfirmedDate = paymentsAfterRecalculation.filter(
+      payment => payment.scheduledDate === firstPayment.scheduledDate,
+    )
+    expect(paymentsOnConfirmedDate).toHaveLength(1)
+    expect(paymentsOnConfirmedDate[0].id).toBe(firstPayment.id)
+    expect(paymentsOnConfirmedDate[0].status).toBe('CONFIRMED_PAID')
+
+    testDb.close()
+  })
+
+  it('préserve une projection corrigée pendant la rematérialisation', async () => {
+    const dbName = `payments-preserve-corrected-db-${crypto.randomUUID()}`
+    createdDbNames.push(dbName)
+
+    const testDb = new SubscriptionDatabase({ name: dbName, skipCloud: true })
+    await testDb.open()
+
+    const sub = await createSubscription(
+      {
+        name: 'Service corrigé',
+        status: 'ACTIVE',
+        renewalMode: 'AUTOMATIC',
+        currentPrice: 15,
+        currency: 'EUR',
+        billingIntervalUnit: 'MONTH',
+        billingIntervalCount: 1,
+        nextChargeDate: '2026-08-10',
+      },
+      testDb,
+    )
+
+    await materializeProjectedPayments(
+      { referenceDate: '2026-07-29', horizonDays: 30, database: testDb },
+    )
+    const [projection] = await listPayments({}, testDb)
+    const correctedAt = new Date('2026-07-30T10:00:00Z')
+    await testDb.payments.put({
+      ...projection,
+      notes: 'Montant vérifié manuellement',
+      correctedAt,
+      updatedAt: correctedAt,
+    })
+    await testDb.subscriptions.put({
+      ...sub,
+      nextChargeDate: '2026-08-11',
+      currentPrice: 16,
+      updatedAt: correctedAt,
+    })
+
+    await materializeProjectedPayments(
+      { referenceDate: '2026-07-29', horizonDays: 30, database: testDb },
+    )
+
+    const paymentsAfterRecalculation = await listPayments({}, testDb)
+    expect(paymentsAfterRecalculation).toHaveLength(2)
+    expect(paymentsAfterRecalculation).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: projection.id,
+          scheduledDate: '2026-08-10',
+          correctedAt,
+        }),
+        expect.objectContaining({
+          scheduledDate: '2026-08-11',
+          status: 'PROJECTED',
+        }),
+      ]),
+    )
+
+    testDb.close()
+  })
+
   it('est idempotent — ne génère pas d\'écritures si les projections sont identiques', async () => {
     const dbName = `payments-idempotent-db-${crypto.randomUUID()}`
     createdDbNames.push(dbName)

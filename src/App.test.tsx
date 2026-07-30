@@ -53,4 +53,15 @@ describe('App', () => {
       screen.getByRole('button', { name: 'Ouvrir le diagnostic' }),
     ).toBeInTheDocument()
   })
+
+  it('reconnaît une URL directe de fiche abonnement', () => {
+    window.location.hash = '#/subscriptions/sbs-introuvable'
+
+    render(<App />)
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Chargement de l’abonnement…' }),
+    ).toBeInTheDocument()
+    expect(window.location.hash).toBe('#/subscriptions/sbs-introuvable')
+  })
 })

@@ -41,6 +41,7 @@ function formatMoney(amount: number, currency: string): string {
 
 interface SubscriptionCardListProps {
   subscriptions: Subscription[]
+  onView: (id: string) => void
   onEdit: (subscription: Subscription) => void
   onArchive: (id: string) => void
   categories: Array<{ id: string; name: string }>
@@ -51,6 +52,7 @@ interface SubscriptionCardListProps {
 
 export default function SubscriptionCardList({
   subscriptions,
+  onView,
   onEdit,
   onArchive,
   categories,
@@ -87,7 +89,11 @@ export default function SubscriptionCardList({
           <article key={sub.id} className="subscription-card" aria-label={sub.name}>
             <div className="card-header">
               <div className="card-title-row">
-                <h3 className="card-name">{sub.name}</h3>
+                <h3 className="card-name">
+                  <button type="button" className="card-name-link" onClick={() => onView(sub.id)}>
+                    {sub.name}
+                  </button>
+                </h3>
                 <span className={`card-status-badge ${STATUS_CLASSES[sub.status]}`}>
                   {STATUS_LABELS[sub.status]}
                 </span>
@@ -131,6 +137,13 @@ export default function SubscriptionCardList({
                 )}
               </div>
               <div className="card-actions">
+                <button
+                  type="button"
+                  className="secondary-button card-action-btn"
+                  onClick={() => onView(sub.id)}
+                >
+                  Voir
+                </button>
                 <button
                   type="button"
                   className="secondary-button card-action-btn"

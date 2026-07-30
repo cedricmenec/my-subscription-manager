@@ -66,6 +66,12 @@ export async function materializeProjectedPaymentsWithStats(
           .equals(subscription.id)
           .and(payment => payment.source === 'GENERATED')
           .toArray()
+        const replaceableProjections = existingGenerated.filter(
+          payment => payment.status === 'PROJECTED' && !payment.correctedAt,
+        )
+        const preservedPayments = existingGenerated.filter(
+          payment => payment.status !== 'PROJECTED' || Boolean(payment.correctedAt),
+        )
 
         let projected: ReturnType<typeof projectSubscriptionPayments>
 
@@ -77,14 +83,21 @@ export async function materializeProjectedPaymentsWithStats(
           continue
         }
 
-        // Compare existing with projected to determine if we need to write
+        // A corrected or finalized GENERATED payment is historical data. Keep it
+        // and do not recreate a projection for the same civil date.
+        const preservedDates = new Set(preservedPayments.map(payment => payment.scheduledDate))
+        const reconcilableProjected = projected.filter(
+          candidate => !preservedDates.has(candidate.scheduledDate),
+        )
+
+        // Compare replaceable projections with the newly calculated projection.
         const existingKeys = new Set(
-          existingGenerated.map(p =>
+          replaceableProjections.map(p =>
             `${p.scheduledDate}|${p.amount.amount}|${p.amount.currency}|${p.status}`,
           ),
         )
         const projectedKeys = new Set(
-          projected.map(c =>
+          reconcilableProjected.map(c =>
             `${c.scheduledDate}|${c.amount.amount}|${c.amount.currency}|${c.status}`,
           ),
         )
@@ -109,16 +122,19 @@ export async function materializeProjectedPaymentsWithStats(
           }
         }
 
-        // Delete existing GENERATED payments that no longer match
-        for (const orphan of existingGenerated) {
+        // Only untouched future projections are replaceable. Corrections and
+        // finalized payments remain immutable history.
+        for (const orphan of replaceableProjections) {
           if (orphan.id) {
             await database.payments.delete(orphan.id)
             deleteCount++
           }
         }
 
+        createdPayments.push(...preservedPayments)
+
         // Create new projections
-        for (const candidate of projected) {
+        for (const candidate of reconcilableProjected) {
           const payment: Payment = {
             id: createEntityId('pym'),
             subscriptionId: candidate.subscriptionId,
@@ -198,14 +214,7 @@ export async function updatePaymentStatus(
     schemaVersion: 5,
   }
 
-  await database.payments.update(id, {
-    status: updated.status,
-    paidDate: updated.paidDate,
-    notes: updated.notes,
-    correctedAt: updated.correctedAt,
-    updatedAt: updated.updatedAt,
-    schemaVersion: 5,
-  })
+  await database.payments.put(updated)
 
   return updated
 }

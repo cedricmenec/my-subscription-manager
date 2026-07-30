@@ -64,6 +64,7 @@ interface SubscriptionCompactListProps {
   sortBy: CompactColumn
   sortDirection: SortDirection
   onSort: (column: CompactColumn) => void
+  onView: (id: string) => void
   onEdit: (subscription: Subscription) => void
   onArchive: (id: string) => void
   categories: Array<{ id: string; name: string }>
@@ -77,6 +78,7 @@ export default function SubscriptionCompactList({
   sortBy,
   sortDirection,
   onSort,
+  onView,
   onEdit,
   onArchive,
   categories,
@@ -130,7 +132,13 @@ export default function SubscriptionCompactList({
             subscriptions.map(sub => (
               <tr key={sub.id} className="compact-row">
                 <td className="compact-cell-name">
-                  <span className="compact-name">{sub.name}</span>
+                  <button
+                    type="button"
+                    className="compact-name compact-name-link"
+                    onClick={() => onView(sub.id)}
+                  >
+                    {sub.name}
+                  </button>
                   {excludedIds.includes(sub.id) && (
                     <span className="exclusion-badge" title={excludedReasons.get(sub.id) ?? ''}>
                       ⚠️ Exclu
@@ -157,6 +165,15 @@ export default function SubscriptionCompactList({
                 <td>{sub.nextRenewalDate ?? 'Calcul auto'}</td>
                 <td>{getCategoryName(sub.categoryId)}</td>
                 <td className="compact-cell-actions">
+                  <button
+                    type="button"
+                    className="compact-action-btn"
+                    onClick={() => onView(sub.id)}
+                    aria-label={`Voir ${sub.name}`}
+                    title="Voir"
+                  >
+                    👁
+                  </button>
                   <button
                     type="button"
                     className="compact-action-btn"

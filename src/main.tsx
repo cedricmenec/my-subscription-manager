@@ -5,7 +5,7 @@ import { db } from './data/db'
 import './styles.css'
 
 // Expose db for console debugging
-;(window as any).db = db
+;(window as Window & { db?: typeof db }).db = db
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

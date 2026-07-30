@@ -38,6 +38,7 @@ import PaymentsPage from './pages/PaymentsPage'
 import SettingsPage from './pages/SettingsPage'
 import DataPage from './pages/DataPage'
 import DiagnosticPage from './pages/DiagnosticPage'
+import SubscriptionDetailPage from './pages/SubscriptionDetailPage'
 
 type OperationStatus =
   | 'aucune-operation'
@@ -70,6 +71,29 @@ const EMPTY_SUMMARY: FinancialSummaryState = {
   excludedSubscriptions: [],
 }
 
+interface NavigationState {
+  page: AppPage
+  subscriptionId: string | null
+}
+
+function parseNavigation(hashValue: string): NavigationState {
+  const hash = hashValue.replace(/^#/, '') || '/'
+  if (hash.startsWith('/subscriptions/')) {
+    const encodedId = hash.slice('/subscriptions/'.length).split('/')[0]
+    try {
+      return { page: 'subscriptions', subscriptionId: decodeURIComponent(encodedId) || null }
+    } catch {
+      return { page: 'subscriptions', subscriptionId: encodedId || null }
+    }
+  }
+  if (hash.startsWith('/subscriptions')) return { page: 'subscriptions', subscriptionId: null }
+  if (hash.startsWith('/payments')) return { page: 'payments', subscriptionId: null }
+  if (hash.startsWith('/settings')) return { page: 'settings', subscriptionId: null }
+  if (hash.startsWith('/data')) return { page: 'data', subscriptionId: null }
+  if (hash.startsWith('/diagnostic')) return { page: 'diagnostic', subscriptionId: null }
+  return { page: 'dashboard', subscriptionId: null }
+}
+
 function resolveOperationStatus(
   operationStatus: OperationStatus,
   appSyncStatus: ReturnType<typeof mapSyncStateToAppStatus>,
@@ -94,14 +118,12 @@ function resolveOperationStatus(
 }
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<AppPage>(() => {
-    const hash = window.location.hash.slice(1) || '/'
-    if (hash.startsWith('/subscriptions')) return 'subscriptions'
-    if (hash.startsWith('/payments')) return 'payments'
-    if (hash.startsWith('/settings')) return 'settings'
-    if (hash.startsWith('/data')) return 'data'
-    return 'dashboard'
-  })
+  const [currentPage, setCurrentPage] = useState<AppPage>(
+    () => parseNavigation(window.location.hash).page,
+  )
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string | null>(
+    () => parseNavigation(window.location.hash).subscriptionId,
+  )
   const [showDiagnostic, setShowDiagnostic] = useState(false)
   const [syncState, setSyncState] = useState<SyncState>(() => db.cloud.syncState.getValue())
   const [persistedSyncState, setPersistedSyncState] = useState(() =>
@@ -114,6 +136,7 @@ function App() {
   const [feedback, setFeedback] = useState('')
   const [networkOnline, setNetworkOnline] = useState<boolean>(navigator.onLine)
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
+  const [subscriptionsLoaded, setSubscriptionsLoaded] = useState(false)
   const [summary, setSummary] = useState<FinancialSummaryState>(EMPTY_SUMMARY)
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([])
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -128,6 +151,7 @@ function App() {
   // Synchronisation hash ↔ état de navigation
   const navigate = useCallback((page: AppPage) => {
     setCurrentPage(page)
+    setSelectedSubscriptionId(null)
     const hashMap: Record<AppPage, string> = {
       dashboard: '/',
       subscriptions: '/subscriptions',
@@ -139,22 +163,17 @@ function App() {
     window.location.hash = hashMap[page]
   }, [])
 
+  const navigateToSubscription = useCallback((id: string) => {
+    setCurrentPage('subscriptions')
+    setSelectedSubscriptionId(id)
+    window.location.hash = `/subscriptions/${encodeURIComponent(id)}`
+  }, [])
+
   useEffect(() => {
     function handleHashChange() {
-      const hash = window.location.hash.slice(1) || '/'
-      if (hash.startsWith('/subscriptions')) {
-        setCurrentPage('subscriptions')
-      } else if (hash.startsWith('/payments')) {
-        setCurrentPage('payments')
-      } else if (hash.startsWith('/settings')) {
-        setCurrentPage('settings')
-      } else if (hash.startsWith('/data')) {
-        setCurrentPage('data')
-      } else if (hash.startsWith('/diagnostic')) {
-        setCurrentPage('diagnostic')
-      } else {
-        setCurrentPage('dashboard')
-      }
+      const navigation = parseNavigation(window.location.hash)
+      setCurrentPage(navigation.page)
+      setSelectedSubscriptionId(navigation.subscriptionId)
     }
 
     window.addEventListener('hashchange', handleHashChange)
@@ -212,6 +231,7 @@ function App() {
         ])
 
         setSubscriptions(loadedSubscriptions)
+        setSubscriptionsLoaded(true)
         setCategories(loadedCategories.map(category => ({ id: category.id, name: category.name })))
 
         if (settings?.exchangeRates) {
@@ -221,6 +241,7 @@ function App() {
         setSummary(loadedSummary)
       } catch (error) {
         console.error('loadContextData failed', error)
+        setSubscriptionsLoaded(true)
         setFeedback(
           `Chargement impossible: ${error instanceof Error ? error.message : 'erreur inconnue'}`,
         )
@@ -492,7 +513,7 @@ function App() {
             onSyncNow={handleSyncNow}
           />
         )}
-        {currentPage === 'subscriptions' && (
+        {currentPage === 'subscriptions' && selectedSubscriptionId === null && (
           <SubscriptionsPage
             subscriptions={subscriptions}
             categories={categories}
@@ -502,6 +523,20 @@ function App() {
             onRefreshFinance={refreshFinance}
             onFeedback={setFeedback}
             onArchiveSubscription={handleArchiveSubscription}
+            onViewSubscription={navigateToSubscription}
+            onSetOperationStatus={setOperationStatus as (status: string) => void}
+          />
+        )}
+        {currentPage === 'subscriptions' && selectedSubscriptionId !== null && (
+          <SubscriptionDetailPage
+            subscription={subscriptions.find(item => item.id === selectedSubscriptionId)}
+            isLoading={!subscriptionsLoaded}
+            payments={payments}
+            categories={categories}
+            onBack={() => navigate('subscriptions')}
+            onRefreshSubscriptions={refreshSubscriptions}
+            onRefreshFinance={refreshFinance}
+            onFeedback={setFeedback}
             onSetOperationStatus={setOperationStatus as (status: string) => void}
           />
         )}

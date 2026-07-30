@@ -20,6 +20,7 @@ interface SubscriptionsPageProps {
   onRefreshFinance: () => void
   onFeedback: (message: string) => void
   onArchiveSubscription: (id: string) => void
+  onViewSubscription: (id: string) => void
   onSetOperationStatus: (status: string) => void
 }
 
@@ -67,6 +68,7 @@ export default function SubscriptionsPage({
   onRefreshFinance,
   onFeedback,
   onArchiveSubscription,
+  onViewSubscription,
   onSetOperationStatus,
 }: SubscriptionsPageProps) {
   const [viewMode, setViewModeState] = useState<'compact' | 'cards'>(getViewMode)
@@ -397,6 +399,7 @@ export default function SubscriptionsPage({
             sortBy={sortBy as CompactColumn}
             sortDirection={sortDirection}
             onSort={handleSort}
+            onView={onViewSubscription}
             onEdit={handleEdit}
             onArchive={handleArchive}
             categories={categories}
@@ -407,6 +410,7 @@ export default function SubscriptionsPage({
         ) : (
           <SubscriptionCardList
             subscriptions={filteredSubscriptions}
+            onView={onViewSubscription}
             onEdit={handleEdit}
             onArchive={handleArchive}
             categories={categories}
