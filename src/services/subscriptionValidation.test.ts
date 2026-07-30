@@ -88,7 +88,7 @@ describe('validateSubscriptionInput - coherence rules', () => {
     expect(result.errors.nextChargeDate).toContain('échéance')
   })
 
-  it('accepte nextChargeDate après nextRenewalDate quand les intervalles diffèrent', () => {
+  it('rejette nextChargeDate après nextRenewalDate indépendamment des intervalles', () => {
     const result = validateSubscriptionInput({
       name: 'Test',
       status: 'ACTIVE',
@@ -101,7 +101,8 @@ describe('validateSubscriptionInput - coherence rules', () => {
       nextRenewalDate: '2026-08-01',
     })
 
-    expect(result.isValid).toBe(true)
+    expect(result.isValid).toBe(false)
+    expect(result.errors.nextChargeDate).toContain('échéance')
   })
 
   it('accepte les nouveaux champs subscriptionDate et renewalPeriodStartDate', () => {

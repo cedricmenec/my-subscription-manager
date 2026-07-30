@@ -1856,6 +1856,11 @@ textarea:focus-visible {
   color: #a44335;
 }
 
+.badge-skip {
+  background: #f0f2f1;
+  color: #6b7d79;
+}
+
 .diagnostic-timeline-item-error {
   background: #fff0ee;
   border-radius: 4px;

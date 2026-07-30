@@ -173,18 +173,10 @@ export function validateSubscriptionInput(
     errors.cancellationUrl = 'L\'URL de résiliation est invalide.'
   }
 
-  // Règle de cohérence nextChargeDate > nextRenewalDate
+  // Règle de gate : nextChargeDate ne peut pas être après nextRenewalDate
   if (
-    input.status === 'ACTIVE' &&
-    input.renewalMode === 'AUTOMATIC' &&
     input.nextChargeDate &&
     input.nextRenewalDate &&
-    input.billingIntervalUnit &&
-    input.billingIntervalCount &&
-    input.renewalIntervalUnit &&
-    input.renewalIntervalCount &&
-    input.billingIntervalUnit === input.renewalIntervalUnit &&
-    input.billingIntervalCount === input.renewalIntervalCount &&
     input.nextChargeDate > input.nextRenewalDate
   ) {
     errors.nextChargeDate = 'La prochaine échéance ne peut pas être après la date de renouvellement.'

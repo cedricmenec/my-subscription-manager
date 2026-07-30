@@ -38,6 +38,7 @@ export default function CalculationTimeline() {
           const isProjectedResult = parsed && parsed.event === 'projected-payments-result'
           const isRenewalResult = parsed && parsed.event === 'next-renewal-date-result'
           const isRenewalError = parsed && parsed.event === 'next-renewal-date-error'
+          const isRenewalSkip = parsed && parsed.event === 'next-renewal-date-skip'
 
           if (isRunSummary && parsed) {
             const trigger = String(parsed.trigger ?? '?')
@@ -151,6 +152,39 @@ export default function CalculationTimeline() {
                 <span className="diagnostic-timeline-trigger">next-renewal-date</span>
                 <span className="diagnostic-timeline-detail">
                   {subscriptionId}: {errorMessage}
+                </span>
+              </div>
+            )
+          }
+
+          if (isRenewalSkip && parsed) {
+            const reason = String(parsed.reason ?? '?')
+            const subscriptionName = String(parsed.subscriptionName ?? parsed.subscriptionId ?? '?')
+
+            const reasonLabels: Record<string, string> = {
+              'missing-anchor': 'Ancre absente',
+              'missing-renewal-cycle': 'Cycle de renouvellement absent',
+              'mode-not-automatic': 'Mode non automatique',
+              'status-ended': 'Statut terminé',
+            }
+            const reasonLabel = reasonLabels[reason] ?? reason
+
+            return (
+              <div
+                key={entry.id ?? index}
+                className="diagnostic-timeline-item"
+              >
+                <span className="diagnostic-timeline-time">
+                  {new Date(entry.timestamp).toLocaleTimeString('fr-FR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                  })}
+                </span>
+                <span className="diagnostic-timeline-badge badge-skip">⏭️</span>
+                <span className="diagnostic-timeline-trigger">next-renewal-date</span>
+                <span className="diagnostic-timeline-detail">
+                  {subscriptionName} — {reasonLabel}
                 </span>
               </div>
             )

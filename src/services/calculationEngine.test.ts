@@ -92,6 +92,14 @@ describe('computeNextRenewalDateForSub - calcul de la date', () => {
     // 2026-01-15 + 2mois + 2mois + 2mois = 2026-07-15, puis +2mois = 2026-09-15
     expect(result).toBe('2026-09-15')
   })
+
+  it('retourne undefined si renewalIntervalUnit absent (pas de fallback billing)', () => {
+    const result = computeNextRenewalDateForSub(
+      { ...base, renewalPeriodStartDate: '2026-01-15', billingIntervalUnit: 'MONTH', billingIntervalCount: 1 },
+      '2026-07-29',
+    )
+    expect(result).toBeUndefined()
+  })
 })
 
 describe('computeNextRenewalDateForSub - règles d arrêt', () => {

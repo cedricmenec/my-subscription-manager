@@ -489,9 +489,40 @@ function createDefaultRegistry(): CalculationDefinition[] {
         let skippedCount = 0
         let errorCount = 0
 
+        function logSkip(reason: string, sub: Subscription) {
+          context.logger.log({
+            timestamp: new Date(),
+            category: 'calc-engine',
+            message: JSON.stringify({
+              event: 'next-renewal-date-skip',
+              runId: context.runId,
+              instanceId: INSTANCE_ID,
+              subscriptionId: sub.id,
+              subscriptionName: sub.name,
+              reason,
+            }),
+          })
+        }
+
         for (const sub of subscriptions) {
           try {
             const newDate = computeNextRenewalDateForSub(sub, today)
+
+            // Journaliser les motifs de skip
+            if (newDate === undefined) {
+              if (sub.renewalMode !== 'AUTOMATIC') {
+                logSkip('mode-not-automatic', sub)
+              } else if (!sub.renewalPeriodStartDate && !sub.subscriptionDate) {
+                logSkip('missing-anchor', sub)
+              } else if (!sub.renewalIntervalUnit) {
+                logSkip('missing-renewal-cycle', sub)
+              } else if (sub.status === 'ENDED') {
+                logSkip('status-ended', sub)
+              } else {
+                logSkip('unknown', sub)
+              }
+            }
+
             const { notify, notifyDays } = computeDefaultAlertForSub(sub)
 
             const hasDateChanged = newDate !== sub.nextRenewalDate
@@ -503,7 +534,6 @@ function createDefaultRegistry(): CalculationDefinition[] {
               await database.subscriptions.put({
                 ...sub,
                 nextRenewalDate: newDate,
-                nextChargeDate: newDate ?? sub.nextChargeDate,
                 notifyBeforeRenewal: notify,
                 notifyBeforeRenewalDays: notifyDays,
                 updatedAt: new Date(),
@@ -541,6 +571,65 @@ function createDefaultRegistry(): CalculationDefinition[] {
             errorCount,
           }),
         })
+      },
+    },
+    {
+      id: 'projected-charge-dates',
+      dependsOn: ['next-renewal-date'],
+      run: async context => {
+        const database = context.database
+        const subscriptions = await database.subscriptions
+          .filter(sub => !sub.archivedAt)
+          .toArray()
+
+        for (const sub of subscriptions) {
+          const startDate = sub.nextChargeDate ?? sub.nextRenewalDate
+          if (!startDate) {
+            context.logger.log({
+              timestamp: new Date(),
+              category: 'calc-engine',
+              message: JSON.stringify({
+                event: 'projected-charge-dates-skip',
+                runId: context.runId,
+                instanceId: INSTANCE_ID,
+                subscriptionId: sub.id,
+                subscriptionName: sub.name,
+                reason: 'missing-next-charge-date',
+              }),
+            })
+            continue
+          }
+
+          const unit = sub.billingIntervalUnit
+          const count = sub.billingIntervalCount ?? 1
+          if (!unit) {
+            continue
+          }
+
+          const projectedDates: string[] = []
+          let current = startDate
+          const maxProjections = 12
+          for (let i = 0; i < maxProjections; i++) {
+            projectedDates.push(current)
+            current = addIntervalToCivilDate(current, unit, count)
+          }
+
+          const key = `${sub.id}:projected-charge-dates`
+          const value = JSON.stringify({
+            subscriptionId: sub.id,
+            projectedDates,
+            generatedAt: new Date().toISOString(),
+          })
+
+          const existing = await database.calculationState.get(key)
+          if (!existing || existing.value !== value) {
+            await database.calculationState.put({
+              key,
+              value,
+              updatedAt: new Date(),
+            })
+          }
+        }
       },
     },
   ]
@@ -582,19 +671,17 @@ export function computeNextRenewalDateForSub(
     return undefined
   }
 
+  // Le cycle de renouvellement doit être défini — pas de fallback vers billingInterval
   if (!sub.renewalIntervalUnit) {
-    // Fallback sur le cycle de facturation si le cycle de renouvellement n'est pas défini
-    if (!sub.billingIntervalUnit) {
-      return undefined
-    }
+    return undefined
   }
 
-  const count = sub.renewalIntervalCount ?? sub.billingIntervalCount ?? 1
-  const unit = sub.renewalIntervalUnit ?? sub.billingIntervalUnit
+  const count = sub.renewalIntervalCount ?? 1
+  const unit = sub.renewalIntervalUnit
   let result = anchor
 
   while (compareCivilDates(result, today) < 0) {
-    result = addIntervalToCivilDate(result, unit!, count)
+    result = addIntervalToCivilDate(result, unit, count)
   }
 
   return result
