@@ -106,6 +106,28 @@ describe('SubscriptionDetailPage', () => {
     expect(within(upcoming!).getAllByText('Prévu')).toHaveLength(2)
   })
 
+  it('affiche jusqu’à douze échéances futures', () => {
+    const futurePayments = Array.from({ length: 13 }, (_, index) =>
+      payment(
+        `pym-future-${index}`,
+        `2026-${String(index + 8).padStart(2, '0')}-15`,
+        'PROJECTED',
+      ),
+    )
+    const normalizedPayments = futurePayments.map((item, index) => ({
+      ...item,
+      scheduledDate: index < 5
+        ? `2026-${String(index + 8).padStart(2, '0')}-15`
+        : `2027-${String(index - 4).padStart(2, '0')}-15`,
+    }))
+
+    renderPage({ payments: normalizedPayments })
+
+    const upcoming = screen.getByRole('heading', { name: 'Prochaines échéances' }).closest('section')
+    expect(upcoming).not.toBeNull()
+    expect(within(upcoming as HTMLElement).getAllByRole('listitem')).toHaveLength(12)
+  })
+
   it('sépare les échéances à vérifier de l’historique replié', () => {
     const { container } = render(
       <SubscriptionDetailPage

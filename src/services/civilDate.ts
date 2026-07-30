@@ -59,6 +59,67 @@ export function addIntervalToCivilDate(
   return createShiftedMonthDate(targetYear, targetMonthIndex, originalDay, preserveEndOfMonth)
 }
 
+export function occurrenceFromCivilDateAnchor(
+  anchor: string,
+  unit: IntervalUnit,
+  count: number,
+  occurrenceIndex: number,
+): CivilDate {
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new Error('Le nombre d’unités doit être un entier strictement positif.')
+  }
+
+  if (!Number.isInteger(occurrenceIndex) || occurrenceIndex < 0) {
+    throw new Error('L’index d’occurrence doit être un entier positif ou nul.')
+  }
+
+  const stepCount = count * occurrenceIndex
+  if (unit === 'DAY') {
+    return addDaysToCivilDate(anchor, stepCount)
+  }
+
+  if (unit === 'WEEK') {
+    return addDaysToCivilDate(anchor, stepCount * 7)
+  }
+
+  const parsedAnchor = parseCivilDate(anchor)
+  const originalDay = parsedAnchor.getUTCDate()
+  const preserveEndOfMonth = isLastDayOfMonth(anchor)
+
+  if (unit === 'MONTH') {
+    return createShiftedMonthDate(
+      parsedAnchor.getUTCFullYear(),
+      parsedAnchor.getUTCMonth() + stepCount,
+      originalDay,
+      preserveEndOfMonth,
+    )
+  }
+
+  return createShiftedMonthDate(
+    parsedAnchor.getUTCFullYear() + stepCount,
+    parsedAnchor.getUTCMonth(),
+    originalDay,
+    preserveEndOfMonth,
+  )
+}
+
+export function findFirstOccurrenceOnOrAfter(
+  anchor: string,
+  unit: IntervalUnit,
+  count: number,
+  referenceDate: string,
+): { date: CivilDate; occurrenceIndex: number } {
+  let occurrenceIndex = 0
+  let date = occurrenceFromCivilDateAnchor(anchor, unit, count, occurrenceIndex)
+
+  while (compareCivilDates(date, referenceDate) < 0) {
+    occurrenceIndex += 1
+    date = occurrenceFromCivilDateAnchor(anchor, unit, count, occurrenceIndex)
+  }
+
+  return { date, occurrenceIndex }
+}
+
 export function isLastDayOfMonth(value: string): boolean {
   const parsed = parseCivilDate(value)
   return parsed.getUTCDate() === getLastDayOfMonth(parsed.getUTCFullYear(), parsed.getUTCMonth())

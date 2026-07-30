@@ -1,10 +1,4 @@
-# projected-charge-dates Specification
-
-## Purpose
-
-Définir le calcul pur et déterministe des occurrences de facturation, la convention RF-01, les politiques calendaires et l’horizon adaptatif utilisés par la matérialisation financière synchronisée.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Calcul RF-01 de la première occurrence
 
@@ -80,3 +74,29 @@ Le calcul des dates projetées SHALL être une opération pure utilisée par la 
 - **WHEN** le moteur calcule les échéances désirées
 - **THEN** le calcul retourne des valeurs déterministes sans horodatage volatil
 - **AND** aucune clé `<subscriptionId>:projected-charge-dates` n’est créée ou mise à jour
+
+## REMOVED Requirements
+
+### Requirement: Projection des N prochaines échéances
+
+**Reason**: La projection fixe de douze occurrences et son stockage séparé sont remplacés par RF-01 et l’horizon adaptatif matérialisé uniquement dans `payments`.
+
+**Migration**: Les consommateurs utilisent les paiements `PROJECTED`; les anciennes entrées locales deviennent inertes.
+
+### Requirement: Date de référence pour la projection
+
+**Reason**: Le fallback de facturation vers `nextRenewalDate` mélangeait cycle financier et cycle contractuel. RF-01 utilise l’ancre de facturation, tandis que `nextRenewalDate` borne seulement la fenêtre.
+
+**Migration**: Les abonnements sans `nextChargeDate` ne produisent pas de paiement projeté.
+
+### Requirement: Idempotence et format de stockage
+
+**Reason**: Le JSON local avec `generatedAt` est redondant et non idempotent.
+
+**Migration**: L’idempotence est assurée par la réconciliation de la table synchronisée `payments`.
+
+### Requirement: Déclencheurs du calculateur
+
+**Reason**: Le calculateur séparé est retiré du registre.
+
+**Migration**: Les mêmes déclencheurs exécutent `projected-payments`, qui appelle le calcul pur d’échéancier.

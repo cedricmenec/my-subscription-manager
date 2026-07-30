@@ -14,14 +14,23 @@ interface UpdatePaymentStatusInput {
   notes?: string
 }
 
-function createEntityId(prefix: string): string {
-  return `${prefix}-${crypto.randomUUID()}`
-}
-
 export interface MaterializationResult {
   payments: Payment[]
   deleteCount: number
   createCount: number
+  updateCount: number
+}
+
+export function createProjectedPaymentId(subscriptionId: string, scheduledDate: string): string {
+  return `pym-projected-${subscriptionId}-${scheduledDate}`
+}
+
+export function isReplaceableProjection(payment: Payment): boolean {
+  return (
+    payment.source === 'GENERATED' &&
+    payment.status === 'PROJECTED' &&
+    !payment.correctedAt
+  )
 }
 
 export async function materializeProjectedPayments(
@@ -44,12 +53,14 @@ export async function materializeProjectedPaymentsWithStats(
 ): Promise<MaterializationResult> {
   const database = options.database ?? db
   const referenceDate = options.referenceDate ?? todayCivilDate()
-  const horizonDays = options.horizonDays ?? 90
-  const windowEnd = addDaysToCivilDate(referenceDate, horizonDays)
+  const windowEnd = options.horizonDays === undefined
+    ? undefined
+    : addDaysToCivilDate(referenceDate, options.horizonDays)
   const now = new Date()
   const createdPayments: Payment[] = []
   let deleteCount = 0
   let createCount = 0
+  let updateCount = 0
 
   try {
     const subscriptions = await database.subscriptions.toArray()
@@ -60,17 +71,20 @@ export async function materializeProjectedPaymentsWithStats(
           continue
         }
 
-        // Load existing GENERATED payments for this subscription
-        const existingGenerated = await database.payments
+        const existingPayments = await database.payments
           .where('subscriptionId')
           .equals(subscription.id)
-          .and(payment => payment.source === 'GENERATED')
+          .and(payment => !payment.deletedAt)
           .toArray()
-        const replaceableProjections = existingGenerated.filter(
-          payment => payment.status === 'PROJECTED' && !payment.correctedAt,
+        const existingGenerated = existingPayments.filter(
+          payment => payment.source === 'GENERATED',
         )
-        const preservedPayments = existingGenerated.filter(
-          payment => payment.status !== 'PROJECTED' || Boolean(payment.correctedAt),
+        const replaceableProjections = existingGenerated.filter(isReplaceableProjection)
+        const protectedPayments = existingPayments.filter(
+          payment => !isReplaceableProjection(payment),
+        )
+        const preservedGenerated = existingGenerated.filter(
+          payment => !replaceableProjections.some(candidate => candidate.id === payment.id),
         )
 
         let projected: ReturnType<typeof projectSubscriptionPayments>
@@ -83,80 +97,72 @@ export async function materializeProjectedPaymentsWithStats(
           continue
         }
 
-        // A corrected or finalized GENERATED payment is historical data. Keep it
-        // and do not recreate a projection for the same civil date.
-        const preservedDates = new Set(preservedPayments.map(payment => payment.scheduledDate))
+        const preservedDates = new Set(protectedPayments.map(payment => payment.scheduledDate))
         const reconcilableProjected = projected.filter(
           candidate => !preservedDates.has(candidate.scheduledDate),
         )
 
-        // Compare replaceable projections with the newly calculated projection.
-        const existingKeys = new Set(
-          replaceableProjections.map(p =>
-            `${p.scheduledDate}|${p.amount.amount}|${p.amount.currency}|${p.status}`,
-          ),
-        )
-        const projectedKeys = new Set(
-          reconcilableProjected.map(c =>
-            `${c.scheduledDate}|${c.amount.amount}|${c.amount.currency}|${c.status}`,
-          ),
-        )
-
-        // If both sets are identical, skip writes entirely for this subscription
-        if (existingKeys.size === projectedKeys.size) {
-          let identical = true
-          for (const key of existingKeys) {
-            if (!projectedKeys.has(key)) {
-              identical = false
-              break
-            }
-          }
-          if (identical) {
-            // Track existing payments as "created" (they already exist)
-            for (const p of existingGenerated) {
-              if (p.id) {
-                createdPayments.push(p)
-              }
-            }
-            continue
-          }
+        const replaceableByDate = new Map<string, Payment[]>()
+        for (const payment of replaceableProjections) {
+          const sameDate = replaceableByDate.get(payment.scheduledDate) ?? []
+          sameDate.push(payment)
+          sameDate.sort((left, right) => left.id.localeCompare(right.id))
+          replaceableByDate.set(payment.scheduledDate, sameDate)
         }
 
-        // Only untouched future projections are replaceable. Corrections and
-        // finalized payments remain immutable history.
-        for (const orphan of replaceableProjections) {
-          if (orphan.id) {
-            await database.payments.delete(orphan.id)
-            deleteCount++
-          }
-        }
+        createdPayments.push(...preservedGenerated)
 
-        createdPayments.push(...preservedPayments)
-
-        // Create new projections
         for (const candidate of reconcilableProjected) {
-          const payment: Payment = {
-            id: createEntityId('pym'),
-            subscriptionId: candidate.subscriptionId,
-            scheduledDate: candidate.scheduledDate,
-            status: candidate.status,
-            amount: candidate.amount,
-            source: 'GENERATED',
-            createdAt: now,
-            updatedAt: now,
-            schemaVersion: 5,
+          const candidatesAtDate = replaceableByDate.get(candidate.scheduledDate) ?? []
+          const existing = candidatesAtDate.shift()
+          if (candidatesAtDate.length > 0) {
+            replaceableByDate.set(candidate.scheduledDate, candidatesAtDate)
+          } else {
+            replaceableByDate.delete(candidate.scheduledDate)
           }
 
-          try {
+          if (existing) {
+            const unchanged =
+              existing.status === candidate.status &&
+              existing.amount.amount === candidate.amount.amount &&
+              existing.amount.currency === candidate.amount.currency
+            if (unchanged) {
+              createdPayments.push(existing)
+              continue
+            }
+
+            const updated: Payment = {
+              ...existing,
+              status: candidate.status,
+              amount: candidate.amount,
+              updatedAt: now,
+              schemaVersion: 5,
+            }
+            await database.payments.put(updated)
+            createdPayments.push(updated)
+            updateCount++
+          } else {
+            const payment: Payment = {
+              id: createProjectedPaymentId(candidate.subscriptionId, candidate.scheduledDate),
+              subscriptionId: candidate.subscriptionId,
+              scheduledDate: candidate.scheduledDate,
+              status: candidate.status,
+              amount: candidate.amount,
+              source: 'GENERATED',
+              createdAt: now,
+              updatedAt: now,
+              schemaVersion: 5,
+            }
             await database.payments.put(payment)
             createdPayments.push(payment)
             createCount++
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error)
-            console.error(
-              `Payment materialization put failed for ${subscription.id} on ${candidate.scheduledDate}:`,
-              errorMsg,
-            )
+          }
+        }
+
+        for (const obsoletePayments of replaceableByDate.values()) {
+          for (const obsolete of obsoletePayments) {
+            await database.payments.delete(obsolete.id)
+            deleteCount++
           }
         }
       }
@@ -165,7 +171,7 @@ export async function materializeProjectedPaymentsWithStats(
     console.error('materializeProjectedPayments failed', error)
   }
 
-  return { payments: createdPayments, deleteCount, createCount }
+  return { payments: createdPayments, deleteCount, createCount, updateCount }
 }
 
 export async function listPayments(

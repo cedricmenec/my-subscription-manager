@@ -39,6 +39,14 @@ describe('createCalculationEngine', () => {
 
     expect(executionOrder).toEqual(['base', 'derived'])
   })
+
+  it('utilise un registre par défaut sans projection locale redondante', () => {
+    const engine = createCalculationEngine()
+    expect(engine.getRegistry().map(calculator => calculator.id)).toEqual([
+      'projected-payments',
+      'next-renewal-date',
+    ])
+  })
 })
 
 describe('computeNextRenewalDateForSub - calcul de la date', () => {
@@ -91,6 +99,14 @@ describe('computeNextRenewalDateForSub - calcul de la date', () => {
     )
     // 2026-01-15 + 2mois + 2mois + 2mois = 2026-07-15, puis +2mois = 2026-09-15
     expect(result).toBe('2026-09-15')
+  })
+
+  it('ne dérive pas vers la fin de mois après février', () => {
+    const result = computeNextRenewalDateForSub(
+      { ...base, renewalPeriodStartDate: '2026-01-30', renewalIntervalUnit: 'MONTH', renewalIntervalCount: 1 },
+      '2026-03-01',
+    )
+    expect(result).toBe('2026-03-30')
   })
 
   it('retourne undefined si renewalIntervalUnit absent (pas de fallback billing)', () => {

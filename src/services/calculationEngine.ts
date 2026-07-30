@@ -1,6 +1,6 @@
 import { db, type DiagnosticLog, type Subscription, type SubscriptionDatabase } from '../data/db'
 import { materializeProjectedPaymentsWithStats } from './payments'
-import { addIntervalToCivilDate, compareCivilDates, todayCivilDate } from './civilDate'
+import { compareCivilDates, findFirstOccurrenceOnOrAfter, todayCivilDate } from './civilDate'
 
 export type CalculationTriggerType = 'mutation' | 'startup' | 'interval' | 'stale-check' | 'manual'
 export type CalculationStatus = 'ok' | 'error' | 'skipped-debounced'
@@ -458,7 +458,7 @@ function createDefaultRegistry(): CalculationDefinition[] {
   return [
     {
       id: 'projected-payments',
-      dependsOn: [],
+      dependsOn: ['next-renewal-date'],
       run: async context => {
         const result = await materializeProjectedPaymentsWithStats({ database: context.database })
         context.logger.log({
@@ -470,6 +470,7 @@ function createDefaultRegistry(): CalculationDefinition[] {
             instanceId: INSTANCE_ID,
             deleteCount: result.deleteCount,
             createCount: result.createCount,
+            updateCount: result.updateCount,
             totalPayments: result.payments.length,
           }),
         })
@@ -573,65 +574,6 @@ function createDefaultRegistry(): CalculationDefinition[] {
         })
       },
     },
-    {
-      id: 'projected-charge-dates',
-      dependsOn: ['next-renewal-date'],
-      run: async context => {
-        const database = context.database
-        const subscriptions = await database.subscriptions
-          .filter(sub => !sub.archivedAt)
-          .toArray()
-
-        for (const sub of subscriptions) {
-          const startDate = sub.nextChargeDate ?? sub.nextRenewalDate
-          if (!startDate) {
-            context.logger.log({
-              timestamp: new Date(),
-              category: 'calc-engine',
-              message: JSON.stringify({
-                event: 'projected-charge-dates-skip',
-                runId: context.runId,
-                instanceId: INSTANCE_ID,
-                subscriptionId: sub.id,
-                subscriptionName: sub.name,
-                reason: 'missing-next-charge-date',
-              }),
-            })
-            continue
-          }
-
-          const unit = sub.billingIntervalUnit
-          const count = sub.billingIntervalCount ?? 1
-          if (!unit) {
-            continue
-          }
-
-          const projectedDates: string[] = []
-          let current = startDate
-          const maxProjections = 12
-          for (let i = 0; i < maxProjections; i++) {
-            projectedDates.push(current)
-            current = addIntervalToCivilDate(current, unit, count)
-          }
-
-          const key = `${sub.id}:projected-charge-dates`
-          const value = JSON.stringify({
-            subscriptionId: sub.id,
-            projectedDates,
-            generatedAt: new Date().toISOString(),
-          })
-
-          const existing = await database.calculationState.get(key)
-          if (!existing || existing.value !== value) {
-            await database.calculationState.put({
-              key,
-              value,
-              updatedAt: new Date(),
-            })
-          }
-        }
-      },
-    },
   ]
 }
 
@@ -676,15 +618,12 @@ export function computeNextRenewalDateForSub(
     return undefined
   }
 
-  const count = sub.renewalIntervalCount ?? 1
-  const unit = sub.renewalIntervalUnit
-  let result = anchor
-
-  while (compareCivilDates(result, today) < 0) {
-    result = addIntervalToCivilDate(result, unit, count)
-  }
-
-  return result
+  return findFirstOccurrenceOnOrAfter(
+    anchor,
+    sub.renewalIntervalUnit,
+    sub.renewalIntervalCount ?? 1,
+    today,
+  ).date
 }
 
 /**

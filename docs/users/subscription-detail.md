@@ -22,7 +22,9 @@ Si aucun paiement projeté n’est encore disponible, la fiche utilise la procha
 
 Pour un abonnement à renouvellement automatique, une seconde carte affiche le **prochain renouvellement**. Le message **Date non calculable** signifie que les informations de période ou de cycle doivent être complétées.
 
-La section **Prochaines échéances** présente jusqu’à cinq paiements prévus, dans l’ordre chronologique.
+La section **Prochaines échéances** présente jusqu’à douze paiements prévus, dans l’ordre chronologique.
+
+Pour une facturation mensuelle sans borne de renouvellement, l’application prépare normalement les douze prochaines mensualités. Si une date de renouvellement ou de fin de service est connue, l’échéancier s’arrête à cette date, en l’incluant lorsqu’un paiement est prévu ce jour-là. Une facturation annuelle affiche uniquement sa prochaine échéance.
 
 ## Vérifier une échéance passée
 
@@ -52,3 +54,5 @@ Après une sauvegarde locale réussie, la fiche reste ouverte et ses information
 La section **Historique des paiements** est repliée par défaut. Son compteur indique le nombre de paiements confirmés, ignorés ou remboursés.
 
 Activez son titre à la souris ou au clavier pour afficher les lignes historiques. Une correction ou une finalisation déjà enregistrée est conservée lors du recalcul des prochaines projections.
+
+Le recalcul peut modifier ou retirer uniquement les prévisions encore intactes. Un paiement confirmé, supposé payé, ignoré, remboursé, corrigé, importé ou saisi manuellement n’est jamais écrasé. Si une telle échéance occupe déjà une date, l’application ne crée pas une seconde prévision au même jour.

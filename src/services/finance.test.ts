@@ -56,6 +56,78 @@ describe('finance helpers', () => {
     expect(projected.map(payment => payment.scheduledDate)).toEqual(['2026-04-01', '2026-05-01'])
   })
 
+  it('projette douze échéances mensuelles par défaut', () => {
+    const subscription = {
+      id: 'sbs-monthly',
+      name: 'Mensuel',
+      status: 'ACTIVE' as const,
+      renewalMode: 'AUTOMATIC' as const,
+      currentPrice: 10,
+      currency: 'EUR',
+      billingIntervalUnit: 'MONTH' as const,
+      billingIntervalCount: 1,
+      nextChargeDate: '2026-08-15',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      schemaVersion: 8,
+    }
+
+    const projected = projectSubscriptionPayments(subscription, '2026-07-30')
+
+    expect(projected).toHaveLength(12)
+    expect(projected[0].scheduledDate).toBe('2026-08-15')
+    expect(projected[11].scheduledDate).toBe('2027-07-15')
+  })
+
+  it('limite une facturation annuelle à la prochaine échéance', () => {
+    const subscription = {
+      id: 'sbs-yearly',
+      name: 'Annuel',
+      status: 'ACTIVE' as const,
+      renewalMode: 'AUTOMATIC' as const,
+      currentPrice: 120,
+      currency: 'EUR',
+      billingIntervalUnit: 'YEAR' as const,
+      billingIntervalCount: 1,
+      nextChargeDate: '2026-09-01',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      schemaVersion: 8,
+    }
+
+    expect(projectSubscriptionPayments(subscription, '2026-07-30').map(
+      payment => payment.scheduledDate,
+    )).toEqual(['2026-09-01'])
+  })
+
+  it('borne la projection au renouvellement inclus', () => {
+    const subscription = {
+      id: 'sbs-bounded',
+      name: 'Mensuel borné',
+      status: 'ACTIVE' as const,
+      renewalMode: 'AUTOMATIC' as const,
+      currentPrice: 10,
+      currency: 'EUR',
+      billingIntervalUnit: 'MONTH' as const,
+      billingIntervalCount: 1,
+      nextChargeDate: '2026-08-15',
+      nextRenewalDate: '2026-12-15',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      schemaVersion: 8,
+    }
+
+    expect(projectSubscriptionPayments(subscription, '2026-07-30').map(
+      payment => payment.scheduledDate,
+    )).toEqual([
+      '2026-08-15',
+      '2026-09-15',
+      '2026-10-15',
+      '2026-11-15',
+      '2026-12-15',
+    ])
+  })
+
   it('calcule les agrégats financiers du lot 3', () => {
     const subscriptions = [
       {

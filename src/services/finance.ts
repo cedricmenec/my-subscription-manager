@@ -9,6 +9,8 @@ import {
   addDaysToCivilDate,
   addIntervalToCivilDate,
   compareCivilDates,
+  findFirstOccurrenceOnOrAfter,
+  occurrenceFromCivilDateAnchor,
   todayCivilDate,
 } from './civilDate'
 import { isValidCivilDate } from './subscriptionValidation'
@@ -119,7 +121,7 @@ export function computeEquivalentAnnualCost(subscription: Subscription): number 
 export function projectSubscriptionPayments(
   subscription: Subscription,
   windowStart: string,
-  windowEnd: string,
+  requestedWindowEnd?: string,
 ): ProjectedPaymentDraft[] {
   const interval = resolveBillingInterval(subscription)
 
@@ -132,42 +134,71 @@ export function projectSubscriptionPayments(
   const stepCount = interval.count
   const price = subscription.currentPrice
   const currency = subscription.currency as string
-  let candidateDate = subscription.nextChargeDate as string
+  const anchor = subscription.nextChargeDate as string
 
   if (typeof price !== 'number') {
     return []
   }
 
   const amount = price
+  let effectiveStart = windowStart
 
   if (subscription.status === 'PAUSED') {
     if (!subscription.pauseUntil) {
       return []
     }
 
-    while (compareCivilDates(candidateDate, subscription.pauseUntil) < 0) {
-      candidateDate = addIntervalToCivilDate(candidateDate, stepUnit, stepCount)
+    if (compareCivilDates(subscription.pauseUntil, effectiveStart) > 0) {
+      effectiveStart = subscription.pauseUntil
     }
   }
 
-  while (compareCivilDates(candidateDate, windowEnd) <= 0) {
-    if (subscription.serviceEndDate && compareCivilDates(candidateDate, subscription.serviceEndDate) > 0) {
+  let windowEnd = requestedWindowEnd ?? addIntervalToCivilDate(windowStart, 'MONTH', 12)
+  if (
+    subscription.nextRenewalDate &&
+    isValidCivilDate(subscription.nextRenewalDate) &&
+    compareCivilDates(subscription.nextRenewalDate, windowEnd) < 0
+  ) {
+    windowEnd = subscription.nextRenewalDate
+  }
+  if (
+    subscription.serviceEndDate &&
+    compareCivilDates(subscription.serviceEndDate, windowEnd) < 0
+  ) {
+    windowEnd = subscription.serviceEndDate
+  }
+
+  if (compareCivilDates(windowEnd, effectiveStart) < 0) {
+    return []
+  }
+
+  const first = findFirstOccurrenceOnOrAfter(anchor, stepUnit, stepCount, effectiveStart)
+  const maxOccurrences = stepUnit === 'YEAR'
+    ? 1
+    : stepUnit === 'MONTH'
+      ? Math.ceil(12 / stepCount)
+      : 366
+
+  for (let offset = 0; offset < maxOccurrences; offset++) {
+    const candidateDate = occurrenceFromCivilDateAnchor(
+      anchor,
+      stepUnit,
+      stepCount,
+      first.occurrenceIndex + offset,
+    )
+    if (compareCivilDates(candidateDate, windowEnd) > 0) {
       break
     }
 
-    if (compareCivilDates(candidateDate, windowStart) >= 0) {
-      projected.push({
-        subscriptionId: subscription.id,
-        scheduledDate: candidateDate,
-        status: 'PROJECTED',
-        amount: {
-          amount,
-          currency,
-        },
-      })
-    }
-
-    candidateDate = addIntervalToCivilDate(candidateDate, stepUnit, stepCount)
+    projected.push({
+      subscriptionId: subscription.id,
+      scheduledDate: candidateDate,
+      status: 'PROJECTED',
+      amount: {
+        amount,
+        currency,
+      },
+    })
   }
 
   return projected

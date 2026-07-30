@@ -5,6 +5,8 @@ import {
   listPayments,
   materializeProjectedPayments,
   materializeProjectedPaymentsWithStats,
+  createProjectedPaymentId,
+  isReplaceableProjection,
   updatePaymentStatus,
 } from './payments'
 
@@ -20,6 +22,43 @@ afterEach(async () => {
 })
 
 describe('payments service', () => {
+  it.each([
+    ['GENERATED', 'ASSUMED_PAID'],
+    ['GENERATED', 'CONFIRMED_PAID'],
+    ['GENERATED', 'SKIPPED'],
+    ['GENERATED', 'REFUNDED'],
+    ['MANUAL', 'PROJECTED'],
+    ['IMPORTED', 'PROJECTED'],
+    ['N8N', 'PROJECTED'],
+  ] as const)('protège une échéance %s/%s', (source, status) => {
+    expect(isReplaceableProjection({
+      id: 'pym-protected',
+      subscriptionId: 'sbs-protected',
+      scheduledDate: '2026-08-01',
+      status,
+      amount: { amount: 10, currency: 'EUR' },
+      source,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      schemaVersion: 8,
+    })).toBe(false)
+  })
+
+  it('protège une projection corrigée', () => {
+    expect(isReplaceableProjection({
+      id: 'pym-corrected',
+      subscriptionId: 'sbs-protected',
+      scheduledDate: '2026-08-01',
+      status: 'PROJECTED',
+      amount: { amount: 10, currency: 'EUR' },
+      source: 'GENERATED',
+      correctedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      schemaVersion: 8,
+    })).toBe(false)
+  })
+
   it('matérialise les paiements projetés sans doublon', async () => {
     const dbName = `payments-db-${crypto.randomUUID()}`
     createdDbNames.push(dbName)
@@ -191,7 +230,7 @@ describe('payments service', () => {
     const generatedPayments = allPayments.filter(p => p.source === 'GENERATED')
 
     expect(manualPayments).toHaveLength(1)
-    expect(generatedPayments.length).toBeGreaterThanOrEqual(1)
+    expect(generatedPayments).toHaveLength(0)
 
     testDb.close()
   })
@@ -337,6 +376,7 @@ describe('payments service', () => {
     )
     expect(secondResult.deleteCount).toBe(0)
     expect(secondResult.createCount).toBe(0)
+    expect(secondResult.updateCount).toBe(0)
 
     // Third run: still no changes
     const thirdResult = await materializeProjectedPaymentsWithStats(
@@ -344,10 +384,76 @@ describe('payments service', () => {
     )
     expect(thirdResult.deleteCount).toBe(0)
     expect(thirdResult.createCount).toBe(0)
+    expect(thirdResult.updateCount).toBe(0)
 
     // Verify total payments still correct
     expect(await listPayments({}, testDb)).toHaveLength(firstResult.payments.length)
 
+    testDb.close()
+  })
+
+  it('met à jour un montant en place sans recréer la projection', async () => {
+    const dbName = `payments-update-in-place-db-${crypto.randomUUID()}`
+    createdDbNames.push(dbName)
+    const testDb = new SubscriptionDatabase({ name: dbName, skipCloud: true })
+    await testDb.open()
+
+    const sub = await createSubscription(
+      {
+        name: 'Montant variable',
+        status: 'ACTIVE',
+        renewalMode: 'AUTOMATIC',
+        currentPrice: 10,
+        currency: 'EUR',
+        billingIntervalUnit: 'MONTH',
+        billingIntervalCount: 1,
+        nextChargeDate: '2026-08-15',
+      },
+      testDb,
+    )
+    await materializeProjectedPaymentsWithStats(
+      { referenceDate: '2026-07-29', horizonDays: 30, database: testDb },
+    )
+    const [before] = await listPayments({}, testDb)
+
+    await testDb.subscriptions.put({ ...sub, currentPrice: 12, updatedAt: new Date() })
+    const result = await materializeProjectedPaymentsWithStats(
+      { referenceDate: '2026-07-29', horizonDays: 30, database: testDb },
+    )
+    const [after] = await listPayments({}, testDb)
+
+    expect(after.id).toBe(before.id)
+    expect(after.amount.amount).toBe(12)
+    expect(result).toMatchObject({ createCount: 0, updateCount: 1, deleteCount: 0 })
+    testDb.close()
+  })
+
+  it('utilise un identifiant déterministe pour une nouvelle projection', async () => {
+    const dbName = `payments-deterministic-id-db-${crypto.randomUUID()}`
+    createdDbNames.push(dbName)
+    const testDb = new SubscriptionDatabase({ name: dbName, skipCloud: true })
+    await testDb.open()
+
+    const sub = await createSubscription(
+      {
+        name: 'Identité stable',
+        status: 'ACTIVE',
+        renewalMode: 'AUTOMATIC',
+        currentPrice: 10,
+        currency: 'EUR',
+        billingIntervalUnit: 'MONTH',
+        billingIntervalCount: 1,
+        nextChargeDate: '2026-08-15',
+      },
+      testDb,
+    )
+    await materializeProjectedPayments(
+      { referenceDate: '2026-07-29', horizonDays: 30, database: testDb },
+    )
+
+    const [payment] = await listPayments({}, testDb)
+    expect(payment.id).toBe(createProjectedPaymentId(sub.id, '2026-08-15'))
+    expect(payment.id.startsWith('pym')).toBe(true)
     testDb.close()
   })
 })

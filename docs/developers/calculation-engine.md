@@ -1,96 +1,124 @@
-# Moteur de calcul
+# Calculation engine
 
-Le moteur de calcul local-first centralise la recomposition des données dérivées à partir des tables de subscriptions, payments et settings.
+The local-first calculation engine rebuilds derived data from subscriptions, payments, and settings.
 
-## Principes
+## Main rules
 
-- Les calculateurs déclarent leurs dépendances de manière explicite.
-- L'exécution suit un ordre topologique afin d'éviter les calculs sur des données encore obsolètes.
-- Les mutations Dexie déclenchent un recalcul debouncé, ce qui évite les rafales lors d'importations ou de restaurations de snapshot.
-- Les résultats persistés sont lus via des requêtes LiveQuery pour réagir automatiquement à la base locale.
-- La matérialisation est **idempotente** : si les projections calculées sont identiques aux données existantes, aucune écriture n'est effectuée.
+- Calculators declare explicit dependencies.
+- The engine uses topological order.
+- Dexie mutations trigger a debounced run.
+- Startup, interval, stale-check, and manual runs are supported.
+- A calculator writes only when its business result changed.
+- `payments` is the single synchronized source for financial occurrences.
+- `calculationState` only stores device-local engine metadata.
 
-## Structure
+## Default graph
 
-- Le registre du moteur se trouve dans src/services/calculationEngine.ts.
-- L'état de suivi du moteur est stocké localement dans la table calculationState de la base Dexie.
-- Le diagnostic de l'application peut afficher l'historique des exécutions et le graphe de dépendances.
+`projected-payments` depends on `next-renewal-date`. A full run therefore updates the renewal boundary before rebuilding the payment schedule.
 
-## Déclenchement
+The former `projected-charge-dates` calculator no longer exists. It stored a second schedule in `calculationState`, but the UI and financial summaries use `payments`.
 
-Le moteur est lancé au démarrage de l'application puis réagit aux mutations locales et aux événements de rafraîchissement. Les calculateurs peuvent être déclenchés manuellement via l'API publishTrigger.
+## RF-01 recurrence
 
-## Idempotence et prévention des boucles inter-instances
+`findFirstOccurrenceOnOrAfter` returns the first occurrence greater than or equal to a civil reference date.
 
-La matérialisation des paiements projetés (GENERATED) est **idempotente** : avant d'écrire, le moteur compare les projections avec les GENERATED existants en utilisant les paires `(scheduledDate, amount, currency, status)`. Si les deux jeux sont identiques pour un abonnement, aucune écriture n'est effectuée.
+Monthly and yearly occurrences are always calculated from the original anchor:
 
-Cela casse les boucles de recalcul entre instances synchronisées via Dexie Cloud :
-1. Instance A modifie un abonnement → sync
-2. Instance B reçoit l'abonnement → recalcule → projections identiques → zéro écriture → pas de sync retour
-3. La boucle est cassée
+```text
+anchor 2026-01-30
+index 1 -> 2026-02-28
+index 2 -> 2026-03-30
+```
 
-### Circuit breaker anti-boucle
+This avoids an accidental switch to end-of-month after February. A real end-of-month anchor keeps that policy:
 
-Le moteur intègre un circuit breaker qui protège contre les runs mutation excessifs :
-- **Seuil** : 5 runs de type `mutation` en 10 secondes
-- **Action** : blocage de tous les nouveaux runs `mutation` pendant 30 secondes
-- Les runs `manual`, `startup`, `interval` et `stale-check` ne sont jamais bloqués
-- Un log est écrit dans `diagnosticLogs` avec la catégorie `circuit-breaker` lors du déclenchement
-- L'état du circuit breaker est exposé via `getCircuitBreakerState()` et visible dans la page Diagnostic
+```text
+anchor 2026-01-31
+index 1 -> 2026-02-28
+index 2 -> 2026-03-31
+```
 
-### Instance ID
+The helper functions live in `src/services/civilDate.ts`.
 
-Chaque session de navigateur génère un identifiant unique (`inst-<uuid>`), inclus dans les logs de calcul et visible dans la page Diagnostic. Cela permet de distinguer les logs de différentes instances.
+## Adaptive projection window
 
-## Nettoyage idempotent des projections
+`projectSubscriptionPayments` starts at the first billing occurrence on or after the reference date.
 
-Le calculateur `projected-payments` charge les paiements GENERATED existants, calcule les projections, et compare les deux jeux. Si identique, il ne fait rien. Si différent, il supprime les anciens et crée les nouveaux dans une transaction atomique.
+- Yearly billing produces one future occurrence.
+- Monthly billing covers up to twelve months and at most `ceil(12 / intervalCount)` occurrences.
+- Daily and weekly billing cover up to twelve months, with a 366 occurrence safety cap.
+- `nextRenewalDate` is an inclusive upper bound.
+- `serviceEndDate` is also an inclusive upper bound.
+- A paused subscription resumes from `pauseUntil` when that date is deterministic.
 
-Le processus pour chaque abonnement :
-1. Chargement des paiements avec `source: 'GENERATED'` pour cet abonnement
-2. Projection des nouveaux paiements
-3. Comparaison : si les projections sont identiques aux existants, passage à l'abonnement suivant
-4. Si différent : suppression des anciens GENERATED + création des nouveaux
+An explicit test window can still be supplied for focused financial calculations and tests.
 
-Tout s'effectue dans une transaction Dexie atomique. Seuls les paiements `GENERATED` sont supprimés — les paiements `MANUAL`, `CONFIRMED_PAID`, `IMPORTED`, etc. ne sont jamais affectés.
+## Differential reconciliation
 
-## Calculateur next-renewal-date
+`materializeProjectedPaymentsWithStats` loads all active payments for one subscription.
 
-Le calculateur `next-renewal-date` met à jour automatiquement `nextRenewalDate` pour tous les abonnements non archivés.
+A payment is replaceable only when all conditions are true:
 
-### Algorithme
+- `source === 'GENERATED'`;
+- `status === 'PROJECTED'`;
+- `correctedAt` is absent.
 
-Pour chaque abonnement non archivé :
+Every other payment is protected. A protected date blocks creation of another projection.
 
-1. **Règles d'arrêt** :
-   - `status = ENDED` → `nextRenewalDate = undefined`
-   - `status = CANCELLED_PENDING_END` avec `serviceEndDate < today` → `nextRenewalDate = undefined`
+The reconciliation is date-based:
 
-2. **Ancre** : `renewalPeriodStartDate` (prioritaire) → `subscriptionDate` (fallback) → pas de calcul
+1. Keep an unchanged projection without writing.
+2. Update an existing projection in place when only amount, currency, or status changed.
+3. Create a missing projection with `pym-projected-<subscriptionId>-<date>`.
+4. Delete only replaceable projections whose dates are no longer desired.
 
-3. **Boucle** : tant que `result < today`, ajouter `renewalInterval` à l'aide de `addIntervalToCivilDate`
+Old projections with random IDs are reused by date. This makes the migration progressive and avoids a bulk rewrite.
 
-4. **Alertes** : `computeDefaultAlertForSub` détermine les valeurs par défaut de `notifyBeforeRenewal` et `notifyBeforeRenewalDays` selon le cycle :
-   - Mensuel → `opt-in / 7j`
-   - Annuel → `opt-out / 30j`
-   - Manuel → `always / 7j`
-   - Si l'utilisateur a déjà renseigné les champs, ils sont conservés
+The result reports `createCount`, `updateCount`, and `deleteCount`. The calculation log contains only these counters and identifiers needed for diagnostics, not full business records.
 
-5. **Idempotence** : écriture uniquement si `nextRenewalDate`, `notifyBeforeRenewal` ou `notifyBeforeRenewalDays` diffère de la valeur stockée
+## Local-first and synchronization flow
 
-### Déclencheurs
+```text
+subscription change
+       |
+       v
+local Dexie transaction
+       |
+       v
+calculation engine
+       |
+       v
+minimal payment writes
+       |
+       v
+Dexie Cloud synchronization
+```
 
-Le calculateur s'exécute dans tous les contextes de run :
-- **startup** : au démarrage de l'application
-- **mutation** : après modification d'un abonnement
-- **stale-check** : vérification périodique quotidienne
-- **interval** : run périodique
-- **manual** : déclenché manuellement
+The local transaction does not wait for the network. Deterministic IDs let two devices converge on the same new projected occurrence. Idempotence prevents a synchronization echo from producing another write.
 
-### Journalisation
+## Loop protection
 
-Chaque exécution produit un log dans `diagnosticLogs` (catégorie `calc-engine`, événement `next-renewal-date-result`) avec le nombre d'abonnements traités, mis à jour, ignorés et en erreur.
+Mutation runs are debounced. A circuit breaker blocks excessive mutation runs after five runs in ten seconds for thirty seconds. Manual, startup, interval, and stale-check runs are not blocked.
 
-## Validation
+Each browser session has an `inst-<uuid>` identifier in diagnostic logs. Calculation writes are temporarily suppressed from mutation scheduling while a run is active.
 
-Les tests de régression se trouvent dans src/services/calculationEngine.test.ts et src/services/payments.test.ts.
+## Renewal calculation
+
+`next-renewal-date` uses the same inclusive RF-01 convention and anchored calendar calculation.
+
+The anchor order is:
+
+1. `renewalPeriodStartDate`;
+2. `subscriptionDate`;
+3. no calculation.
+
+Ended subscriptions and cancelled subscriptions past `serviceEndDate` have no future renewal. User-defined alert settings are preserved.
+
+## Tests
+
+The main regression tests are:
+
+- `src/services/civilDate.test.ts`;
+- `src/services/finance.test.ts`;
+- `src/services/payments.test.ts`;
+- `src/services/calculationEngine.test.ts`.

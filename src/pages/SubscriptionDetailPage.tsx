@@ -163,7 +163,7 @@ export default function SubscriptionDetailPage({
     return {
       upcoming: relevant
         .filter(payment => payment.status === 'PROJECTED' && payment.scheduledDate >= today)
-        .slice(0, 5),
+        .slice(0, 12),
       attention: relevant
         .filter(payment =>
           (payment.status === 'PROJECTED' || payment.status === 'ASSUMED_PAID') &&
