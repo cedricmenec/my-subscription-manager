@@ -15,6 +15,21 @@ L'application SHALL fournir une liste d'abonnements avec deux modes d'affichage 
 - **AND** les colonnes affichées sont : Nom, Statut, Prix, Cycle de facturation, Prochaine échéance, Catégorie
 - **AND** chaque ligne affiche des boutons d'action (Modifier, Archiver)
 
+#### Scenario: Archivage d'un abonnement avec confirmation
+
+- **WHEN** l'utilisateur clique sur "Archiver" dans le mode compact ou le mode cartes
+- **THEN** un dialogue de confirmation s'affiche avec le titre "Archiver l'abonnement"
+- **AND** le message indique le nom de l'abonnement à archiver
+- **AND** le bouton "Accepter" est en variante warning (orange)
+- **WHEN** l'utilisateur confirme
+- **THEN** l'abonnement est archivé (soft delete)
+- **AND** un message de confirmation s'affiche : "Abonnement archivé localement. Synchronisation asynchrone en cours."
+
+#### Scenario: Annulation de l'archivage d'un abonnement
+
+- **WHEN** l'utilisateur clique sur "Refuser" dans le dialogue de confirmation
+- **THEN** l'abonnement n'est pas archivé
+
 #### Scenario: Basculement vers le mode cartes
 
 - **WHEN** l'utilisateur clique sur le bouton de basculement vers le mode cartes

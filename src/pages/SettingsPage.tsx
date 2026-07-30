@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { SyncState } from 'dexie-cloud-addon'
 import { getSyncStatusLabel, mapSyncStateToAppStatus } from '../services/syncState'
 import { validateExchangeRate } from '../services/finance'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 interface SettingsPageProps {
   categories: Array<{ id: string; name: string }>
@@ -43,6 +44,8 @@ export default function SettingsPage({
   const [localCurrency, setLocalCurrency] = useState('')
   const [localRate, setLocalRate] = useState('')
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({})
+  const [pendingDeleteCategoryId, setPendingDeleteCategoryId] = useState<string | null>(null)
+  const [pendingRemoveCurrency, setPendingRemoveCurrency] = useState<string | null>(null)
   const appSyncStatus = mapSyncStateToAppStatus(syncState)
 
   function handleAddRate() {
@@ -62,6 +65,20 @@ export default function SettingsPage({
   }
 
   function handleRemoveRate(currency: string) {
+    setPendingRemoveCurrency(currency)
+  }
+
+  function handleConfirmDeleteCategory() {
+    if (!pendingDeleteCategoryId) return
+    const id = pendingDeleteCategoryId
+    setPendingDeleteCategoryId(null)
+    onDeleteCategory(id)
+  }
+
+  function handleConfirmRemoveRate() {
+    if (!pendingRemoveCurrency) return
+    const currency = pendingRemoveCurrency
+    setPendingRemoveCurrency(null)
     onRemoveExchangeRate(currency)
   }
 
@@ -86,7 +103,7 @@ export default function SettingsPage({
                 <button
                   type="button"
                   className="danger-button"
-                  onClick={() => onDeleteCategory(category.id)}
+                  onClick={() => setPendingDeleteCategoryId(category.id)}
                 >
                   Supprimer
                 </button>
@@ -199,6 +216,38 @@ export default function SettingsPage({
           </button>
         </div>
       </section>
+
+      {/* Confirm Delete Category Dialog */}
+      <ConfirmDialog
+        isOpen={pendingDeleteCategoryId !== null}
+        onClose={() => setPendingDeleteCategoryId(null)}
+        onConfirm={handleConfirmDeleteCategory}
+        title="Supprimer la catégorie"
+        message={
+          pendingDeleteCategoryId
+            ? `La catégorie « ${categories.find(c => c.id === pendingDeleteCategoryId)?.name ?? ''} » sera définitivement supprimée. Les abonnements liés ne seront pas supprimés.`
+            : ''
+        }
+        confirmLabel="Supprimer"
+        cancelLabel="Annuler"
+        variant="danger"
+      />
+
+      {/* Confirm Remove Rate Dialog */}
+      <ConfirmDialog
+        isOpen={pendingRemoveCurrency !== null}
+        onClose={() => setPendingRemoveCurrency(null)}
+        onConfirm={handleConfirmRemoveRate}
+        title="Supprimer le taux de conversion"
+        message={
+          pendingRemoveCurrency
+            ? `Le taux de conversion ${pendingRemoveCurrency} → EUR sera définitivement supprimé. Les abonnements dans cette devise seront exclus des totaux consolidés.`
+            : ''
+        }
+        confirmLabel="Supprimer"
+        cancelLabel="Annuler"
+        variant="danger"
+      />
     </div>
   )
 }

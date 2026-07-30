@@ -6,6 +6,7 @@ import AdvancedSearchBar from '../components/AdvancedSearchBar'
 import SubscriptionCompactList from '../components/SubscriptionCompactList'
 import SubscriptionCardList from '../components/SubscriptionCardList'
 import SubscriptionDialog, { type SubscriptionFormState, EMPTY_FORM, toFormState } from '../components/SubscriptionDialog'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 interface SubscriptionsPageProps {
   subscriptions: Subscription[]
@@ -72,6 +73,7 @@ export default function SubscriptionsPage({
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formState, setFormState] = useState<SubscriptionFormState>(EMPTY_FORM)
+  const [pendingArchiveId, setPendingArchiveId] = useState<string | null>(null)
 
   // Local filters
   // searchDraft is the immediate input; search is the debounced effective value
@@ -243,12 +245,23 @@ export default function SubscriptionsPage({
     setDialogOpen(true)
   }
 
-  async function handleArchive(id: string) {
+  function handleArchive(id: string) {
+    setPendingArchiveId(id)
+  }
+
+  async function handleConfirmArchive() {
+    if (!pendingArchiveId) return
+    const id = pendingArchiveId
+    setPendingArchiveId(null)
     await onArchiveSubscription(id)
     onSetOperationStatus('enregistre-localement')
     onFeedback('Abonnement archivé localement. Synchronisation asynchrone en cours.')
     onRefreshSubscriptions()
     onRefreshFinance()
+  }
+
+  function handleCancelArchive() {
+    setPendingArchiveId(null)
   }
 
   function handleDialogSaved() {
@@ -418,6 +431,22 @@ export default function SubscriptionsPage({
         editingId={editingId}
         formState={formState}
         categories={categories}
+      />
+
+      {/* Confirm Archive Dialog */}
+      <ConfirmDialog
+        isOpen={pendingArchiveId !== null}
+        onClose={handleCancelArchive}
+        onConfirm={handleConfirmArchive}
+        title="Archiver l'abonnement"
+        message={
+          pendingArchiveId
+            ? `L'abonnement « ${subscriptions.find(s => s.id === pendingArchiveId)?.name ?? ''} » sera archivé. Il pourra être réactivé ultérieurement.`
+            : ''
+        }
+        confirmLabel="Archiver"
+        cancelLabel="Annuler"
+        variant="warning"
       />
     </div>
   )
