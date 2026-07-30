@@ -257,6 +257,11 @@ export default function SubscriptionsPage({
     onRefreshFinance()
   }
 
+  function handleSavedAfterSave(saved: Subscription) {
+    setEditingId(saved.id)
+    setFormState(toFormState(saved))
+  }
+
   return (
     <div className="subscriptions-page">
       <header className="page-header">
@@ -401,13 +406,14 @@ export default function SubscriptionsPage({
 
       {/* Subscription Dialog */}
       <SubscriptionDialog
-        key={editingId ?? 'new'}
+        key="subscription-dialog"
         isOpen={dialogOpen}
         onClose={() => {
           setDialogOpen(false)
           setEditingId(null)
         }}
         onSaved={handleDialogSaved}
+        onSavedAfterSave={handleSavedAfterSave}
         onFeedback={onFeedback}
         editingId={editingId}
         formState={formState}

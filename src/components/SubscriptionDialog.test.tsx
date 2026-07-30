@@ -5,6 +5,32 @@ import SubscriptionDialog, {
   EMPTY_FORM,
 } from '../components/SubscriptionDialog'
 
+// Mock des services de persistence
+vi.mock('../services/subscriptions', async () => {
+  const actual = await vi.importActual('../services/subscriptions')
+  return {
+    ...actual,
+    createSubscription: vi.fn().mockResolvedValue({
+      id: 'sbs-test-1',
+      name: 'Netflix',
+      status: 'ACTIVE',
+      renewalMode: 'UNKNOWN',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      schemaVersion: 8,
+    }),
+    updateSubscription: vi.fn().mockResolvedValue({
+      id: 'sbs-test-1',
+      name: 'Netflix',
+      status: 'ACTIVE',
+      renewalMode: 'UNKNOWN',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      schemaVersion: 8,
+    }),
+  }
+})
+
 // jsdom ne supporte pas HTMLDialogElement — on mocke les méthodes nécessaires
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = vi.fn(function mockShowModal(this: HTMLDialogElement) {
@@ -26,6 +52,7 @@ function renderDialog(overrides?: {
 }) {
   const onClose = vi.fn()
   const onSaved = vi.fn()
+  const onSavedAfterSave = vi.fn()
   const onFeedback = vi.fn()
 
   const utils = render(
@@ -33,6 +60,7 @@ function renderDialog(overrides?: {
       isOpen={true}
       onClose={onClose}
       onSaved={onSaved}
+      onSavedAfterSave={onSavedAfterSave}
       onFeedback={onFeedback}
       editingId={overrides?.editingId ?? null}
       formState={overrides?.formState ?? EMPTY_FORM}
@@ -40,7 +68,7 @@ function renderDialog(overrides?: {
     />,
   )
 
-  return { onClose, onSaved, onFeedback, ...utils }
+  return { onClose, onSaved, onSavedAfterSave, onFeedback, ...utils }
 }
 
 function fillFormField(label: string, value: string) {
@@ -160,6 +188,56 @@ describe('SubscriptionDialog — hasUnsavedChanges', () => {
 
       expect(window.confirm).toHaveBeenCalledOnce()
       expect(onClose).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Bouton Sauvegarder (sans fermeture)', () => {
+    beforeEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('ne ferme PAS le dialogue après sauvegarde', async () => {
+      const { onClose } = renderDialog()
+      fillFormField('Nom', 'Netflix')
+
+      fireEvent.click(screen.getByText('Sauvegarder'))
+
+      // Attendre la résolution de la promesse asynchrone
+      await vi.waitFor(() => {
+        expect(screen.getByText('Sauvegarder')).toBeInTheDocument()
+      })
+
+      expect(onClose).not.toHaveBeenCalled()
+    })
+
+    it('affiche le badge de confirmation après sauvegarde', async () => {
+      renderDialog()
+      fillFormField('Nom', 'Netflix')
+
+      fireEvent.click(screen.getByText('Sauvegarder'))
+
+      await vi.waitFor(() => {
+        expect(screen.getByText(/✓ Enregistré à/)).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('Bouton Sauvegarder et Fermer', () => {
+    beforeEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('ferme le dialogue après soumission', async () => {
+      const { onClose } = renderDialog()
+      fillFormField('Nom', 'Netflix')
+
+      const form = screen.getByRole('dialog').querySelector('form')
+      expect(form).not.toBeNull()
+      fireEvent.submit(form!)
+
+      await vi.waitFor(() => {
+        expect(onClose).toHaveBeenCalledTimes(1)
+      })
     })
   })
 })

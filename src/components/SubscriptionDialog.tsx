@@ -188,6 +188,7 @@ interface SubscriptionDialogProps {
   isOpen: boolean
   onClose: () => void
   onSaved: () => void
+  onSavedAfterSave?: (saved: Subscription) => void
   onFeedback: (message: string) => void
   editingId: string | null
   formState: SubscriptionFormState
@@ -198,6 +199,7 @@ export default function SubscriptionDialog({
   isOpen,
   onClose,
   onSaved,
+  onSavedAfterSave,
   onFeedback,
   editingId,
   formState,
@@ -209,6 +211,13 @@ export default function SubscriptionDialog({
   const [localForm, setLocalForm] = useState<SubscriptionFormState>(formState)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!saveSuccess) return
+    const timer = setTimeout(() => setSaveSuccess(null), 2000)
+    return () => clearTimeout(timer)
+  }, [saveSuccess])
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -316,6 +325,90 @@ export default function SubscriptionDialog({
       }
 
       onClose()
+      onSaved()
+    } catch (error) {
+      if (error instanceof Error && error.name === 'SubscriptionValidationError') {
+        const typedError = error as SubscriptionValidationError
+        setFormErrors(typedError.errors)
+      } else {
+        onFeedback(
+          `Enregistrement impossible: ${error instanceof Error ? error.message : 'erreur inconnue'}`,
+        )
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function handleSaveWithoutClose() {
+    setFormErrors({})
+    setIsSubmitting(true)
+
+    try {
+      const payload: UpsertSubscriptionInput = {
+        name: localForm.name,
+        provider: localForm.provider,
+        planName: localForm.planName,
+        categoryId: localForm.categoryId,
+        status: localForm.isPaused && localForm.status !== 'PAUSED' ? 'PAUSED' : localForm.status,
+        renewalMode: localForm.renewalMode,
+        currentPrice: parseOptionalNumber(localForm.currentPrice),
+        currency: localForm.currency,
+        billingIntervalCount: parseOptionalNumber(localForm.billingIntervalCount),
+        billingIntervalUnit: localForm.billingIntervalUnit || undefined,
+        commitmentIntervalCount: localForm.hasCommitment
+          ? parseOptionalNumber(localForm.commitmentIntervalCount)
+          : undefined,
+        commitmentIntervalUnit: localForm.hasCommitment
+          ? (localForm.commitmentIntervalUnit || undefined)
+          : undefined,
+        commitmentStartDate: localForm.hasCommitment
+          ? (localForm.commitmentStartDate || undefined)
+          : undefined,
+        renewalIntervalCount: localForm.renewalMode === 'AUTOMATIC'
+          ? parseOptionalNumber(localForm.renewalIntervalCount)
+          : undefined,
+        renewalIntervalUnit: localForm.renewalMode === 'AUTOMATIC'
+          ? (localForm.renewalIntervalUnit || undefined)
+          : undefined,
+        subscriptionDate: localForm.renewalMode === 'AUTOMATIC'
+          ? (localForm.subscriptionDate || undefined)
+          : undefined,
+        renewalPeriodStartDate: localForm.renewalMode === 'AUTOMATIC'
+          ? (localForm.renewalPeriodStartDate || undefined)
+          : undefined,
+        startDate: localForm.startDate || undefined,
+        nextChargeDate: localForm.nextChargeDate || undefined,
+        pauseStartDate: localForm.isPaused ? (localForm.pauseStartDate || undefined) : undefined,
+        pauseUntil: localForm.isPaused ? (localForm.pauseUntil || undefined) : undefined,
+        serviceEndDate: localForm.serviceEndDate || undefined,
+        managementUrl: localForm.managementUrl,
+        cancellationUrl: localForm.cancellationUrl,
+        cancellationInstructions: localForm.cancellationInstructions,
+        notes: localForm.notes,
+      }
+
+      let saved: Subscription
+      if (editingId) {
+        saved = await updateSubscription(editingId, payload)
+      } else {
+        saved = await createSubscription(payload)
+      }
+
+      // Mettre à jour le formulaire avec les données persistées (incluant les calculs moteur)
+      const freshForm = toFormState(saved)
+      setLocalForm(freshForm)
+      initialFormRef.current = freshForm
+      setFormErrors({})
+
+      // Badge de confirmation avec horodatage
+      const now = new Date()
+      const hh = String(now.getHours()).padStart(2, '0')
+      const mm = String(now.getMinutes()).padStart(2, '0')
+      setSaveSuccess(`✓ Enregistré à ${hh}:${mm}`)
+
+      // Notifier le parent pour mise à jour editingId et rafraîchissement
+      onSavedAfterSave?.(saved)
       onSaved()
     } catch (error) {
       if (error instanceof Error && error.name === 'SubscriptionValidationError') {
@@ -644,6 +737,7 @@ export default function SubscriptionDialog({
         </fieldset>
 
         <div className="dialog-actions">
+          {saveSuccess && <span className="save-indicator" key={saveSuccess}>{saveSuccess}</span>}
           <button type="button" className="secondary-button" onClick={() => {
             if (hasUnsavedChanges()) {
               if (window.confirm('Voulez-vous vraiment annuler les modifications en cours ?')) {
@@ -655,8 +749,11 @@ export default function SubscriptionDialog({
           }} disabled={isSubmitting}>
             Annuler
           </button>
-          <button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Enregistrement…' : editingId ? 'Enregistrer les modifications' : 'Créer'}
+          <button type="button" className="save-button" onClick={handleSaveWithoutClose} disabled={isSubmitting}>
+            {isSubmitting ? 'Enregistrement…' : 'Sauvegarder'}
+          </button>
+          <button type="submit" className="primary-button" disabled={isSubmitting}>
+            {isSubmitting ? 'Enregistrement…' : 'Sauvegarder et Fermer'}
           </button>
         </div>
       </form>

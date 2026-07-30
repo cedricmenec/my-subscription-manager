@@ -1249,6 +1249,29 @@ textarea:focus-visible {
   border-top: 1px solid #d9dfdd;
 }
 
+.save-indicator {
+  color: #2f6f66;
+  font-size: 0.85rem;
+  font-weight: 600;
+  align-self: center;
+  margin-right: auto;
+  animation: saveFadeOut 2s ease-out forwards;
+}
+
+@keyframes saveFadeOut {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.save-button {
+  background: #2f6f66;
+  color: #ffffff;
+}
+
+.save-button:hover {
+  background: #1f5a52;
+}
+
 /* ── Dialog New Sections ── */
 
 .cycle-summary {
