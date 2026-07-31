@@ -70,7 +70,7 @@ describe('payments service', () => {
       {
         name: 'Canal+',
         status: 'ACTIVE',
-        renewalMode: 'AUTOMATIC',
+        renewalMode: 'ROLLING',
         currentPrice: 22.00,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH',
@@ -106,7 +106,7 @@ describe('payments service', () => {
       {
         name: 'Spotify',
         status: 'ACTIVE',
-        renewalMode: 'AUTOMATIC',
+        renewalMode: 'ROLLING',
         currentPrice: 12.00,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH',
@@ -144,7 +144,7 @@ describe('payments service', () => {
       {
         name: 'Gaia TV',
         status: 'ACTIVE',
-        renewalMode: 'AUTOMATIC',
+        renewalMode: 'ROLLING',
         currentPrice: 139.99,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH',
@@ -196,7 +196,7 @@ describe('payments service', () => {
       {
         name: 'Netflix',
         status: 'ACTIVE',
-        renewalMode: 'AUTOMATIC',
+        renewalMode: 'ROLLING',
         currentPrice: 15.99,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH',
@@ -246,7 +246,7 @@ describe('payments service', () => {
       {
         name: 'Service confirmé',
         status: 'ACTIVE',
-        renewalMode: 'AUTOMATIC',
+        renewalMode: 'ROLLING',
         currentPrice: 20,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH',
@@ -292,7 +292,7 @@ describe('payments service', () => {
       {
         name: 'Service corrigé',
         status: 'ACTIVE',
-        renewalMode: 'AUTOMATIC',
+        renewalMode: 'ROLLING',
         currentPrice: 15,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH',
@@ -354,7 +354,7 @@ describe('payments service', () => {
       {
         name: 'Disney+',
         status: 'ACTIVE',
-        renewalMode: 'AUTOMATIC',
+        renewalMode: 'ROLLING',
         currentPrice: 10.99,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH',
@@ -402,7 +402,7 @@ describe('payments service', () => {
       {
         name: 'Montant variable',
         status: 'ACTIVE',
-        renewalMode: 'AUTOMATIC',
+        renewalMode: 'ROLLING',
         currentPrice: 10,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH',
@@ -438,7 +438,7 @@ describe('payments service', () => {
       {
         name: 'Identité stable',
         status: 'ACTIVE',
-        renewalMode: 'AUTOMATIC',
+        renewalMode: 'ROLLING',
         currentPrice: 10,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH',

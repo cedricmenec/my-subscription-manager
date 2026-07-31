@@ -15,6 +15,7 @@ import {
   compareCivilDates,
   todayCivilDate,
 } from './civilDate'
+import { normalizeSubscriptionContinuation } from './renewal'
 
 export class SubscriptionValidationError extends Error {
   readonly errors: Record<string, string>
@@ -230,7 +231,7 @@ export async function createSubscription(
         )
       : undefined
 
-  const subscription: Subscription = {
+  const subscription = normalizeSubscriptionContinuation<Subscription>({
     id: createEntityId('sbs'),
     name: input.name.trim(),
     provider: cleanOptional(input.provider),
@@ -261,8 +262,8 @@ export async function createSubscription(
     notes: cleanOptional(input.notes),
     createdAt: now,
     updatedAt: now,
-    schemaVersion: 8,
-  }
+    schemaVersion: 9,
+  })
 
   await database.transaction('rw', database.subscriptions, async () => {
     await database.subscriptions.put(subscription)
@@ -300,7 +301,7 @@ export async function updateSubscription(
       : cleanOptional(patch.nextRenewalDate)
   const nextChargeDate = cleanOptional(patch.nextChargeDate)
 
-  const merged: Subscription = {
+  const merged = normalizeSubscriptionContinuation<Subscription>({
     ...current,
     ...patch,
     name: patch.name?.trim() ?? current.name,
@@ -335,8 +336,8 @@ export async function updateSubscription(
     cancellationInstructions: cleanOptional(patch.cancellationInstructions),
     notes: cleanOptional(patch.notes),
     updatedAt: new Date(),
-    schemaVersion: 8,
-  }
+    schemaVersion: 9,
+  })
 
   const validation = validateSubscriptionInput({
     name: merged.name,
@@ -365,42 +366,27 @@ export async function updateSubscription(
     throw new SubscriptionValidationError(validation.errors)
   }
 
+  let saved = merged
   await database.transaction('rw', database.subscriptions, async () => {
-    await database.subscriptions.update(id, {
-      ...patch,
-      name: merged.name,
-      provider: merged.provider,
-      planName: merged.planName,
-      categoryId: merged.categoryId,
-      currency: merged.currency,
-      billingIntervalUnit: merged.billingIntervalUnit,
-      billingIntervalCount: merged.billingIntervalCount,
-      commitmentIntervalUnit: merged.commitmentIntervalUnit,
-      commitmentIntervalCount: merged.commitmentIntervalCount,
-      renewalIntervalUnit: merged.renewalIntervalUnit,
-      renewalIntervalCount: merged.renewalIntervalCount,
-      startDate: merged.startDate,
-      nextChargeDate: nextChargeDate,
-      nextRenewalDate: nextRenewalDate,
-      subscriptionDate: merged.subscriptionDate,
-      renewalPeriodStartDate: merged.renewalPeriodStartDate,
-      commitmentStartDate: merged.commitmentStartDate,
-      pauseUntil: merged.pauseUntil,
-      pauseStartDate: merged.pauseStartDate,
-      serviceEndDate: merged.serviceEndDate,
-      managementUrl: merged.managementUrl,
-      cancellationUrl: merged.cancellationUrl,
-      cancellationInstructions: merged.cancellationInstructions,
-      notes: merged.notes,
-      status: merged.status,
-      renewalMode: merged.renewalMode,
-      currentPrice: merged.currentPrice,
-      updatedAt: merged.updatedAt,
-      schemaVersion: 8,
+    const latest = await database.subscriptions.get(id)
+    if (!latest || latest.archivedAt) {
+      throw new Error('Abonnement introuvable.')
+    }
+
+    saved = normalizeSubscriptionContinuation<Subscription>({
+      ...latest,
+      ...merged,
+      id: latest.id,
+      createdAt: latest.createdAt,
+      archivedAt: latest.archivedAt,
+      deletedAt: latest.deletedAt,
+      notifyBeforeRenewal: latest.notifyBeforeRenewal,
+      notifyBeforeRenewalDays: latest.notifyBeforeRenewalDays,
     })
+    await database.subscriptions.put(saved)
   })
 
-  return merged
+  return saved
 }
 
 function sortSubscriptions(

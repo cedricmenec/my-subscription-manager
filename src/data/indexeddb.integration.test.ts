@@ -35,7 +35,7 @@ describe('IndexedDB integration', () => {
       {
         name: 'Youtube Premium',
         status: 'ACTIVE',
-        renewalMode: 'AUTOMATIC',
+        renewalMode: 'ROLLING',
         currentPrice: 12.99,
         currency: 'EUR',
         billingIntervalUnit: 'MONTH',
@@ -84,7 +84,7 @@ describe('IndexedDB integration', () => {
       {
         name: 'Canal Plus',
         status: 'ACTIVE',
-        renewalMode: 'AUTOMATIC',
+        renewalMode: 'ROLLING',
       },
       db,
     )
@@ -110,7 +110,7 @@ describe('IndexedDB integration', () => {
       {
         name: 'Claude Plus',
         status: 'ACTIVE',
-        renewalMode: 'AUTOMATIC',
+        renewalMode: 'ROLLING',
       },
       db,
     )
@@ -173,7 +173,7 @@ describe('IndexedDB migration v7→v8', () => {
     expect(sub).toBeDefined()
     expect(sub!.subscriptionDate).toBe('2025-06-15')
     expect(sub!.renewalPeriodStartDate).toBe('2025-06-15')
-    expect(sub!.schemaVersion).toBe(8)
+    expect(sub!.schemaVersion).toBe(9)
     // Le champ legacy a été supprimé
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((sub as any).renewalStartDate).toBeUndefined()
@@ -215,7 +215,7 @@ describe('IndexedDB migration v7→v8', () => {
     expect(sub).toBeDefined()
     expect(sub!.subscriptionDate).toBeUndefined()
     expect(sub!.renewalPeriodStartDate).toBeUndefined()
-    expect(sub!.schemaVersion).toBe(8)
+    expect(sub!.schemaVersion).toBe(9)
 
     newDb.close()
   })

@@ -1,8 +1,4 @@
-## Purpose
-
-Définir les garanties d'import et export des données aux formats JSON (snapshot) et CSV (abonnements et paiements) pour l'application Abos.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Snapshot JSON — export complet
 
@@ -23,22 +19,6 @@ Le système SHALL permettre d'exporter toutes les données dans un snapshot JSON
 
 Le système SHALL restaurer atomiquement un snapshot valide et SHALL accepter `ROLLING` tout en normalisant les anciens abonnements manifestement continus selon les critères déterministes de migration.
 
-#### Scenario: Restauration snapshot valide
-- **WHEN** l'utilisateur sélectionne un fichier snapshot JSON valide et confirme la restauration
-- **THEN** toutes les données existantes sont supprimées logiquement (soft delete)
-- **AND** toutes les données du snapshot sont importées dans une transaction Dexie `rw` multi-table
-- **AND** l'interface affiche un rapport avec le nombre d'entités restaurées par table
-
-#### Scenario: Restauration snapshot — format invalide
-
-- **WHEN** la valeur de mode ne fait partie d'aucun mode supporté
-- **THEN** la restauration est refusée avec une erreur explicite avant écriture
-
-#### Scenario: Restauration snapshot — annulation avant écriture
-
-- **WHEN** l'utilisateur annule après l'aperçu
-- **THEN** aucune donnée n'est modifiée
-
 #### Scenario: Restauration snapshot valide avec ROLLING
 
 - **WHEN** un snapshot valide contient un abonnement `ROLLING`
@@ -51,16 +31,25 @@ Le système SHALL restaurer atomiquement un snapshot valide et SHALL accepter `R
 - **THEN** l'abonnement est normalisé en `ROLLING`
 - **AND** ses paiements importés restent inchangés
 
+#### Scenario: Restauration snapshot — format invalide
+
+- **WHEN** la valeur de mode ne fait partie d'aucun mode supporté
+- **THEN** la restauration est refusée avec une erreur explicite avant écriture
+
+#### Scenario: Restauration snapshot — annulation avant écriture
+
+- **WHEN** l'utilisateur annule après l'aperçu
+- **THEN** aucune donnée n'est modifiée
+
 ### Requirement: Import CSV abonnements
 
 Le système SHALL importer les abonnements en mode additif, SHALL accepter `ROLLING`, `AUTOMATIC`, `MANUAL` et `UNKNOWN`, et SHALL appliquer les invariants du mode avant toute écriture.
 
-#### Scenario: Import CSV réussi
-- **WHEN** l'utilisateur sélectionne un fichier CSV valide avec des abonnements
-- **AND** confirme l'import après l'aperçu
-- **THEN** chaque ligne valide est créée comme un nouvel abonnement avec un ID généré automatiquement (préfixe `sbs-`)
-- **AND** les abonnements existants ne sont pas modifiés
-- **AND** l'interface affiche un rapport avec le nombre de créations, warnings et erreurs
+#### Scenario: Import CSV réussi en reconduction continue
+
+- **WHEN** une ligne valide contient `renewalMode=ROLLING`
+- **THEN** un nouvel abonnement est créé avec un ID `sbs-`
+- **AND** ses champs contractuels incompatibles sont absents
 
 #### Scenario: Import CSV — doublon de nom détecté
 
@@ -78,12 +67,6 @@ Le système SHALL importer les abonnements en mode additif, SHALL accepter `ROLL
 - **THEN** l'aperçu compte lignes valides, warnings et erreurs
 - **AND** aucune écriture n'a lieu avant confirmation
 
-#### Scenario: Import CSV réussi en reconduction continue
-
-- **WHEN** une ligne valide contient `renewalMode=ROLLING`
-- **THEN** un nouvel abonnement est créé avec un ID `sbs-`
-- **AND** ses champs contractuels incompatibles sont absents
-
 ### Requirement: Export CSV abonnements
 
 Le système SHALL exporter les abonnements non supprimés en CSV et SHALL inclure la valeur exacte du mode de continuation, dont `ROLLING`.
@@ -92,14 +75,6 @@ Le système SHALL exporter les abonnements non supprimés en CSV et SHALL inclur
 
 - **WHEN** l'utilisateur exporte des abonnements comprenant une reconduction continue
 - **THEN** le CSV contient `ROLLING` dans la colonne documentée de ce mode
-
-### Requirement: Export CSV paiements
-
-Le système SHALL permettre d'exporter les paiements au format CSV, téléchargeable par le navigateur, conformément à FUN-PORT-002.
-
-#### Scenario: Export CSV paiements
-- **WHEN** l'utilisateur clique sur "Exporter les paiements (CSV)"
-- **THEN** le navigateur télécharge un fichier `.csv` avec l'en-tête et les données de tous les paiements non supprimés
 
 ### Requirement: Documentation du schéma
 
@@ -111,19 +86,3 @@ Le système SHALL maintenir `docs/import-schema.md` à jour pour les formats JSO
 - **THEN** les formats snapshot et CSV sont décrits
 - **AND** `ROLLING`, `AUTOMATIC`, `MANUAL` et `UNKNOWN` sont listés avec leur sens
 - **AND** le nettoyage des champs contractuels de `ROLLING` est documenté
-
-### Requirement: Page d'interface `/data`
-
-Le système SHALL fournir une page dédiée aux opérations d'import, export et snapshot, accessible depuis la navigation principale.
-
-#### Scenario: Accès à la page Data
-- **WHEN** l'utilisateur navigue vers la page Data
-- **THEN** il voit les sections Snapshot, Import CSV, Export CSV
-- **AND** chaque section a des boutons d'action clairs
-- **AND** un rapport s'affiche après chaque opération
-
-#### Scenario: Import hors connexion
-- **WHEN** l'appareil est hors connexion
-- **AND** l'utilisateur importe un fichier CSV
-- **THEN** l'import est effectué localement dans IndexedDB
-- **AND** les données seront synchronisées au retour du réseau

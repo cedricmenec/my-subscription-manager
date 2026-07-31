@@ -101,7 +101,7 @@ L'application SHALL conserver les indicateurs visuels existants (badge d'exclusi
 
 ### Requirement: Filtrage par recherche textuelle avec debounce
 
-Le système doit filtrer la liste des abonnements en temps réel lorsque l'utilisateur saisit du texte dans le champ de recherche. La recherche doit être insensible à la casse et porter sur les champs `name`, `provider` et `notes` de l'abonnement. Un debounce de 300ms évite des recalculs excessifs lors de la frappe.
+Le système SHALL filtrer la liste des abonnements en temps réel lorsque l'utilisateur saisit du texte dans le champ de recherche. La recherche SHALL être insensible à la casse et porter sur les champs `name`, `provider` et `notes` de l'abonnement. Un debounce de 300ms évite des recalculs excessifs lors de la frappe.
 
 #### Scenario: Recherche par nom d'abonnement
 
@@ -130,7 +130,7 @@ Le système doit filtrer la liste des abonnements en temps réel lorsque l'utili
 
 ### Requirement: Filtrage par statut
 
-Le système doit filtrer la liste des abonnements selon le statut sélectionné dans le filtre avancé.
+Le système SHALL filtrer la liste des abonnements selon le statut sélectionné dans le filtre avancé.
 
 #### Scenario: Filtrage par statut actif
 
@@ -149,7 +149,7 @@ Le système doit filtrer la liste des abonnements selon le statut sélectionné 
 
 ### Requirement: Filtrage par catégorie
 
-Le système doit filtrer la liste des abonnements selon la catégorie sélectionnée dans le filtre avancé.
+Le système SHALL filtrer la liste des abonnements selon la catégorie sélectionnée dans le filtre avancé.
 
 #### Scenario: Filtrage par catégorie sélectionnée
 
@@ -168,26 +168,36 @@ Le système doit filtrer la liste des abonnements selon la catégorie sélection
 
 ### Requirement: Filtrage par mode de renouvellement
 
-Le système doit filtrer la liste des abonnements selon le mode de renouvellement sélectionné.
+Le système SHALL filtrer la liste selon le mode de continuation sélectionné et SHALL proposer un libellé distinct pour `ROLLING`, `AUTOMATIC`, `MANUAL` et `UNKNOWN` dans les filtres et badges.
 
 #### Scenario: Filtrage par renouvellement automatique
 
-- **WHEN** l'utilisateur sélectionne "Automatique" dans le filtre de renouvellement
-- **THEN** la liste ne montre que les abonnements dont le `renewalMode` est `AUTOMATIC`
+- **WHEN** l'utilisateur sélectionne « Renouvellement automatique »
+- **THEN** la liste ne montre que les abonnements dont `renewalMode=AUTOMATIC`
 
 #### Scenario: Filtrage par renouvellement manuel
 
-- **WHEN** l'utilisateur sélectionne "Manuel" dans le filtre de renouvellement
-- **THEN** la liste ne montre que les abonnements dont le `renewalMode` est `MANUAL`
+- **WHEN** l'utilisateur sélectionne « Renouvellement manuel »
+- **THEN** la liste ne montre que les abonnements dont `renewalMode=MANUAL`
 
 #### Scenario: Filtrage tous renouvellements
 
-- **WHEN** l'utilisateur sélectionne "Tous" dans le filtre de renouvellement
-- **THEN** aucun abonnement n'est exclu par le filtre de renouvellement
+- **WHEN** l'utilisateur sélectionne « Tous »
+- **THEN** aucun abonnement n'est exclu par le filtre de continuation
+
+#### Scenario: Filtrage par reconduction continue
+
+- **WHEN** l'utilisateur sélectionne « Reconduction continue »
+- **THEN** la liste ne montre que les abonnements dont `renewalMode=ROLLING`
+
+#### Scenario: Filtrage par mode inconnu
+
+- **WHEN** l'utilisateur sélectionne « Inconnu »
+- **THEN** la liste ne montre que les abonnements dont `renewalMode=UNKNOWN`
 
 ### Requirement: Filtrage abonnements incomplets
 
-Le système doit permettre d'afficher uniquement les abonnements dont la fiche est incomplète.
+Le système SHALL permettre d'afficher uniquement les abonnements dont la fiche est incomplète.
 
 #### Scenario: Activation du filtre incomplet
 
@@ -201,7 +211,7 @@ Le système doit permettre d'afficher uniquement les abonnements dont la fiche e
 
 ### Requirement: Combinaison de filtres
 
-Le système doit combiner tous les filtres actifs avec une logique ET (intersection).
+Le système SHALL combiner tous les filtres actifs avec une logique ET (intersection).
 
 #### Scenario: Recherche + catégorie
 

@@ -20,7 +20,7 @@ export type SubscriptionStatus =
   | 'ENDED'
   | 'UNKNOWN'
 
-export type RenewalMode = 'AUTOMATIC' | 'MANUAL' | 'UNKNOWN'
+export type RenewalMode = 'ROLLING' | 'AUTOMATIC' | 'MANUAL' | 'UNKNOWN'
 
 export type LegacyBillingInterval = 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'UNKNOWN'
 
@@ -512,6 +512,71 @@ export class SubscriptionDatabase extends Dexie {
           .modify((settings: Record<string, unknown>) => {
             settings.schemaVersion = 8
           })
+      })
+
+    this.version(9)
+      .stores({
+        subscriptions:
+          `${syncedPrimaryKey}, status, categoryId, renewalMode, billingIntervalUnit, nextChargeDate, nextRenewalDate, updatedAt, archivedAt, deletedAt`,
+        categories: `${syncedPrimaryKey}, &name, sortOrder, updatedAt`,
+        payments:
+          `${syncedPrimaryKey}, subscriptionId, scheduledDate, paidDate, status, [subscriptionId+scheduledDate], updatedAt, deletedAt`,
+        settings: `${syncedPrimaryKey}, &key, updatedAt`,
+        localSettings: '&key, updatedAt',
+        diagnosticLogs: '++id, timestamp, category',
+        calculationState: '&key, updatedAt',
+        importPreview: '&id, rowNumber, status',
+        drafts: '&id, entityType, updatedAt',
+      })
+      .upgrade(async tx => {
+        const ambiguousSubscriptionIds: string[] = []
+        await tx
+          .table('subscriptions')
+          .toCollection()
+          .modify((subscription: Partial<Subscription>) => {
+            const hasSameNonAnnualCycle = Boolean(
+              subscription.renewalMode === 'AUTOMATIC' &&
+                subscription.billingIntervalUnit &&
+                subscription.billingIntervalUnit !== 'YEAR' &&
+                subscription.billingIntervalUnit === subscription.renewalIntervalUnit &&
+                (subscription.billingIntervalCount ?? 1) ===
+                  (subscription.renewalIntervalCount ?? 1),
+            )
+            const isDeterministicRolling = Boolean(
+              hasSameNonAnnualCycle &&
+                subscription.nextChargeDate &&
+                subscription.nextRenewalDate &&
+                subscription.nextChargeDate === subscription.nextRenewalDate,
+            )
+
+            if (isDeterministicRolling) {
+              subscription.renewalMode = 'ROLLING'
+              delete subscription.renewalIntervalUnit
+              delete subscription.renewalIntervalCount
+              delete subscription.renewalPeriodStartDate
+              delete subscription.nextRenewalDate
+              delete subscription.notifyBeforeRenewal
+              delete subscription.notifyBeforeRenewalDays
+            } else if (hasSameNonAnnualCycle && subscription.id) {
+              ambiguousSubscriptionIds.push(subscription.id)
+            }
+
+            subscription.schemaVersion = 9
+          })
+
+        if (ambiguousSubscriptionIds.length > 0) {
+          await tx.table('diagnosticLogs').bulkAdd(
+            ambiguousSubscriptionIds.map(subscriptionId => ({
+              timestamp: new Date(),
+              category: 'migration',
+              message: JSON.stringify({
+                event: 'rolling-migration-review',
+                subscriptionId,
+                reason: 'ambiguous-legacy-continuation',
+              }),
+            })),
+          )
+        }
       })
 
     if (!options.skipCloud) {

@@ -66,6 +66,8 @@ describe('finance helpers', () => {
       currency: 'EUR',
       billingIntervalUnit: 'MONTH' as const,
       billingIntervalCount: 1,
+      renewalIntervalUnit: 'YEAR' as const,
+      renewalIntervalCount: 1,
       nextChargeDate: '2026-08-15',
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -100,6 +102,54 @@ describe('finance helpers', () => {
     )).toEqual(['2026-09-01'])
   })
 
+  it('couvre les trois horizons de référence hors connexion', () => {
+    const common = {
+      status: 'ACTIVE' as const,
+      currentPrice: 10,
+      currency: 'EUR',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      schemaVersion: 9,
+    }
+    const rolling = projectSubscriptionPayments({
+      ...common,
+      id: 'sbs-offline-rolling',
+      name: 'Mensuel continu',
+      renewalMode: 'ROLLING',
+      billingIntervalUnit: 'MONTH',
+      billingIntervalCount: 1,
+      nextChargeDate: '2026-08-15',
+      nextRenewalDate: '2026-08-15',
+    }, '2026-07-30')
+    const annualContract = projectSubscriptionPayments({
+      ...common,
+      id: 'sbs-offline-contract',
+      name: 'Contrat annuel mensualisé',
+      renewalMode: 'AUTOMATIC',
+      billingIntervalUnit: 'MONTH',
+      billingIntervalCount: 1,
+      renewalIntervalUnit: 'YEAR',
+      renewalIntervalCount: 1,
+      nextChargeDate: '2026-08-15',
+      nextRenewalDate: '2026-12-15',
+    }, '2026-07-30')
+    const yearly = projectSubscriptionPayments({
+      ...common,
+      id: 'sbs-offline-yearly',
+      name: 'Facturation annuelle',
+      renewalMode: 'ROLLING',
+      billingIntervalUnit: 'YEAR',
+      billingIntervalCount: 1,
+      nextChargeDate: '2026-09-01',
+    }, '2026-07-30')
+
+    expect(rolling).toHaveLength(12)
+    expect(annualContract.map(payment => payment.scheduledDate)).toEqual([
+      '2026-08-15', '2026-09-15', '2026-10-15', '2026-11-15', '2026-12-15',
+    ])
+    expect(yearly).toHaveLength(1)
+  })
+
   it('borne la projection au renouvellement inclus', () => {
     const subscription = {
       id: 'sbs-bounded',
@@ -112,6 +162,8 @@ describe('finance helpers', () => {
       billingIntervalCount: 1,
       nextChargeDate: '2026-08-15',
       nextRenewalDate: '2026-12-15',
+      renewalIntervalUnit: 'YEAR' as const,
+      renewalIntervalCount: 1,
       createdAt: new Date(),
       updatedAt: new Date(),
       schemaVersion: 8,

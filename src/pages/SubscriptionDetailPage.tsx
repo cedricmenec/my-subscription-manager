@@ -41,8 +41,9 @@ const STATUS_CLASSES: Record<SubscriptionStatus, string> = {
 }
 
 const RENEWAL_LABELS: Record<RenewalMode, string> = {
-  AUTOMATIC: 'Automatique',
-  MANUAL: 'Manuel',
+  ROLLING: 'Reconduction continue',
+  AUTOMATIC: 'Renouvellement automatique',
+  MANUAL: 'Renouvellement manuel',
   UNKNOWN: 'À qualifier',
 }
 
@@ -83,11 +84,21 @@ function formatDate(value?: string): string {
   }
 }
 
-function formatTimestamp(value: Date): string {
+function formatTimestamp(value: unknown): string {
+  const date = value instanceof Date
+    ? value
+    : typeof value === 'string' || typeof value === 'number'
+      ? new Date(value)
+      : undefined
+
+  if (!date || Number.isNaN(date.getTime())) {
+    return '—'
+  }
+
   return new Intl.DateTimeFormat('fr-FR', {
     dateStyle: 'medium',
     timeStyle: 'short',
-  }).format(value)
+  }).format(date)
 }
 
 function formatRelativeDate(value: string, today: string): string {
@@ -357,14 +368,18 @@ export default function SubscriptionDetailPage({
             <DetailField label="Mode de renouvellement">
               {RENEWAL_LABELS[subscription.renewalMode]}
             </DetailField>
-            <DetailField label="Cycle de renouvellement">
-              {formatInterval(subscription.renewalIntervalCount, subscription.renewalIntervalUnit)}
-            </DetailField>
-            <DetailField label="Date de souscription">{formatDate(subscription.subscriptionDate)}</DetailField>
-            <DetailField label="Début de période de renouvellement">
-              {formatDate(subscription.renewalPeriodStartDate)}
-            </DetailField>
-            <DetailField label="Prochain renouvellement">{formatDate(subscription.nextRenewalDate)}</DetailField>
+            {subscription.renewalMode !== 'ROLLING' ? (
+              <>
+                <DetailField label="Cycle de renouvellement">
+                  {formatInterval(subscription.renewalIntervalCount, subscription.renewalIntervalUnit)}
+                </DetailField>
+                <DetailField label="Date de souscription">{formatDate(subscription.subscriptionDate)}</DetailField>
+                <DetailField label="Début de période de renouvellement">
+                  {formatDate(subscription.renewalPeriodStartDate)}
+                </DetailField>
+                <DetailField label="Prochain renouvellement">{formatDate(subscription.nextRenewalDate)}</DetailField>
+              </>
+            ) : null}
             <DetailField label="Début d’engagement">{formatDate(subscription.commitmentStartDate)}</DetailField>
             <DetailField label="Durée d’engagement">
               {formatInterval(subscription.commitmentIntervalCount, subscription.commitmentIntervalUnit)}

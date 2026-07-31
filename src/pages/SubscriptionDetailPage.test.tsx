@@ -165,7 +165,16 @@ describe('SubscriptionDetailPage', () => {
       name: 'Prochaines échéances importantes',
     })
     expect(within(highlights).queryByText('Prochain renouvellement')).not.toBeInTheDocument()
-    expect(screen.getByText('Manuel')).toBeInTheDocument()
+    expect(screen.getByText('Renouvellement manuel')).toBeInTheDocument()
+  })
+
+  it('affiche la reconduction continue sans carte de renouvellement', () => {
+    renderPage({
+      subscription: { ...subscription, renewalMode: 'ROLLING', nextRenewalDate: undefined },
+    })
+    const highlights = screen.getByLabelText('Prochaines échéances importantes')
+    expect(within(highlights).queryByText('Prochain renouvellement')).not.toBeInTheDocument()
+    expect(screen.getByText('Reconduction continue')).toBeInTheDocument()
   })
 
   it('affiche les états de chargement et introuvable', () => {
@@ -193,5 +202,18 @@ describe('SubscriptionDetailPage', () => {
     renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Modifier' }))
     expect(screen.getByRole('dialog', { name: 'Modifier l’abonnement' })).toBeInTheDocument()
+  })
+
+  it('tolère les horodatages sérialisés ou invalides des anciennes données', () => {
+    renderPage({
+      subscription: {
+        ...subscription,
+        createdAt: '2024-01-01T10:00:00.000Z',
+        updatedAt: 'date-invalide',
+      } as unknown as Subscription,
+    })
+
+    expect(screen.getByText(/^Créé le (?!—)/)).toBeInTheDocument()
+    expect(screen.getByText('Mis à jour le —')).toBeInTheDocument()
   })
 })

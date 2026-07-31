@@ -51,7 +51,12 @@ Tableau d'objets représentant les abonnements. Chaque objet correspond à la ta
 | `commitmentIntervalCount` | `number` | Non | Nombre d'unités de l'engagement |
 | `renewalIntervalUnit` | `string` | Non | Unité du cycle de renouvellement |
 | `renewalIntervalCount` | `number` | Non | Nombre d'unités du renouvellement |
-| `renewalMode` | `string` | Oui | `AUTOMATIC`, `MANUAL`, `UNKNOWN` |
+| `renewalMode` | `string` | Oui | `ROLLING`, `AUTOMATIC`, `MANUAL`, `UNKNOWN` |
+| `subscriptionDate` | `string` | Non | Date de souscription contractuelle (`YYYY-MM-DD`) |
+| `renewalPeriodStartDate` | `string` | Non | Ancre de la période de renouvellement (`YYYY-MM-DD`) |
+| `nextRenewalDate` | `string` | Non | Prochaine date de renouvellement contractuel (`YYYY-MM-DD`) |
+| `notifyBeforeRenewal` | `boolean` | Non | Activation de l'alerte contractuelle |
+| `notifyBeforeRenewalDays` | `number` | Non | Délai de l'alerte en jours |
 | `startDate` | `string` | Non | Date de début (`YYYY-MM-DD`) |
 | `nextChargeDate` | `string` | Non | Prochaine date de facturation (`YYYY-MM-DD`) |
 | `pauseUntil` | `string` | Non | Fin de pause (`YYYY-MM-DD`) |
@@ -147,7 +152,14 @@ Le CSV d'import permet d'**ajouter** des abonnements en masse. Les IDs sont gén
 | `billingIntervalCount` | `number` | Non | Nombre d'unités |
 | `commitmentIntervalUnit` | `string` | Non | Unité d'engagement |
 | `commitmentIntervalCount` | `number` | Non | Nombre d'unités d'engagement |
-| `renewalMode` | `string` | Oui | `AUTOMATIC`, `MANUAL`, `UNKNOWN` |
+| `renewalMode` | `string` | Oui | `ROLLING`, `AUTOMATIC`, `MANUAL`, `UNKNOWN` |
+| `renewalIntervalUnit` | `string` | Non | `DAY`, `WEEK`, `MONTH`, `YEAR` |
+| `renewalIntervalCount` | `number` | Non | Nombre d'unités du cycle contractuel |
+| `subscriptionDate` | `string` | Non | Date de souscription (`YYYY-MM-DD`) |
+| `renewalPeriodStartDate` | `string` | Non | Ancre contractuelle (`YYYY-MM-DD`) |
+| `nextRenewalDate` | `string` | Non | Date contractuelle (`YYYY-MM-DD`) |
+| `notifyBeforeRenewal` | `boolean` | Non | `true` ou `false` |
+| `notifyBeforeRenewalDays` | `number` | Non | Délai en jours |
 | `nextChargeDate` | `string` | Non | Prochaine facturation (`YYYY-MM-DD`) |
 | `startDate` | `string` | Non | Date de début (`YYYY-MM-DD`) |
 | `pauseUntil` | `string` | Non | Fin de pause (`YYYY-MM-DD`) |
@@ -160,22 +172,23 @@ Le CSV d'import permet d'**ajouter** des abonnements en masse. Les IDs sont gén
 ### Exemple
 
 ```csv
-name,provider,planName,categoryId,status,currentPrice,currency,billingIntervalUnit,billingIntervalCount,commitmentIntervalUnit,commitmentIntervalCount,renewalMode,nextChargeDate,startDate,pauseUntil,serviceEndDate,managementUrl,cancellationUrl,cancellationInstructions,notes
-Netflix,Netflix Inc.,Standard,,ACTIVE,15.99,USD,MONTH,1,,,AUTOMATIC,2026-08-15,2025-08-15,,,,,,
-Spotify,Spotify AB,Premium,,ACTIVE,9.99,EUR,MONTH,1,,,AUTOMATIC,2026-08-10,2024-03-01,,,,,,
-"Cloud Pro",Cloud Corp,"Plan Affaires",ctg-abc123,ACTIVE,49.99,EUR,MONTH,1,YEAR,12,AUTOMATIC,2026-09-01,2026-01-01,,,,https://cloud.pro/manage,https://cloud.pro/cancel,Annuler depuis le portail,
+name,provider,planName,categoryId,status,currentPrice,currency,billingIntervalUnit,billingIntervalCount,commitmentIntervalUnit,commitmentIntervalCount,renewalMode,renewalIntervalUnit,renewalIntervalCount,subscriptionDate,renewalPeriodStartDate,nextRenewalDate,notifyBeforeRenewal,notifyBeforeRenewalDays,nextChargeDate,startDate,pauseUntil,serviceEndDate,managementUrl,cancellationUrl,cancellationInstructions,notes
+Spotify,Spotify AB,Premium,,ACTIVE,9.99,EUR,MONTH,1,,,ROLLING,,,,,,,,2026-08-10,2024-03-01,,,,,,
+"Cloud Pro",Cloud Corp,"Plan Affaires",ctg-abc123,ACTIVE,49.99,EUR,MONTH,1,YEAR,1,AUTOMATIC,YEAR,1,2026-01-01,2026-01-01,2027-01-01,false,30,2026-09-01,2026-01-01,,,https://cloud.pro/manage,https://cloud.pro/cancel,Annuler depuis le portail,
 ```
 
 ### Règles de validation
 
 1. `name` : ne doit pas être vide
 2. `status` : doit être une valeur valide de `SubscriptionStatus`
-3. `renewalMode` : doit être `AUTOMATIC`, `MANUAL` ou `UNKNOWN`
+3. `renewalMode` : doit être `ROLLING`, `AUTOMATIC`, `MANUAL` ou `UNKNOWN`
 4. `currentPrice` : si présent, doit être un nombre valide
 5. `billingIntervalUnit` : si présent, doit être `DAY`, `WEEK`, `MONTH` ou `YEAR`
 6. `billingIntervalCount` : si présent, doit être un entier positif
 7. Les dates (`nextChargeDate`, `startDate`, etc.) : si présentes, doivent être au format `YYYY-MM-DD` valide
 8. Les lignes invalides sont ignorées et signalées dans le rapport d'import
+
+Avec `ROLLING`, les champs `renewalIntervalUnit`, `renewalIntervalCount`, `renewalPeriodStartDate`, `nextRenewalDate`, `notifyBeforeRenewal` et `notifyBeforeRenewalDays` sont incompatibles et sont supprimés avant écriture. Un ancien abonnement automatique non annuel est normalisé vers `ROLLING` uniquement si les cycles de facturation et de renouvellement sont égaux et si `nextChargeDate` est exactement égale à `nextRenewalDate`. Les cas ambigus et la facturation annuelle restent inchangés.
 
 ---
 
@@ -184,8 +197,8 @@ Spotify,Spotify AB,Premium,,ACTIVE,9.99,EUR,MONTH,1,,,AUTOMATIC,2026-08-10,2024-
 Mêmes colonnes que le CSV d'import, avec en plus la colonne `id` en première position.
 
 ```csv
-id,name,provider,planName,categoryId,status,currentPrice,currency,billingIntervalUnit,billingIntervalCount,commitmentIntervalUnit,commitmentIntervalCount,renewalMode,nextChargeDate,startDate,pauseUntil,serviceEndDate,managementUrl,cancellationUrl,cancellationInstructions,notes
-sbs-abc123,Netflix,Netflix Inc.,Standard,,ACTIVE,15.99,USD,MONTH,1,,,AUTOMATIC,2026-08-15,2025-08-15,,,,,,
+id,name,provider,planName,categoryId,status,currentPrice,currency,billingIntervalUnit,billingIntervalCount,commitmentIntervalUnit,commitmentIntervalCount,renewalMode,renewalIntervalUnit,renewalIntervalCount,subscriptionDate,renewalPeriodStartDate,nextRenewalDate,notifyBeforeRenewal,notifyBeforeRenewalDays,nextChargeDate,startDate,pauseUntil,serviceEndDate,managementUrl,cancellationUrl,cancellationInstructions,notes
+sbs-abc123,Spotify,Spotify AB,Premium,,ACTIVE,9.99,EUR,MONTH,1,,,ROLLING,,,,,,,,2026-08-10,2024-03-01,,,,,,
 ```
 
 ---

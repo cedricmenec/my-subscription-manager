@@ -240,4 +240,29 @@ describe('SubscriptionDialog — hasUnsavedChanges', () => {
       })
     })
   })
+
+  describe('Continuation', () => {
+    it('place le focus sur le premier champ', () => {
+      renderDialog()
+      expect(screen.getByLabelText(/^Nom\s*\*?$/i)).toHaveFocus()
+    })
+
+    it('propose les quatre modes avec la nouvelle question', () => {
+      renderDialog()
+      const select = screen.getByLabelText(/Comment l'abonnement se poursuit-il/i)
+      expect(select).toHaveTextContent('Reconduction continue')
+      expect(select).toHaveTextContent('Renouvellement automatique à date fixe')
+      expect(select).toHaveTextContent('Renouvellement manuel à date fixe')
+      expect(select).toHaveTextContent('Inconnu')
+    })
+
+    it('ne copie pas le cycle de facturation en choisissant AUTOMATIC', () => {
+      renderDialog()
+      fireEvent.change(screen.getByLabelText(/Comment l'abonnement se poursuit-il/i), {
+        target: { value: 'AUTOMATIC' },
+      })
+      expect(screen.getByLabelText(/Cycle de renouvellement: quantité/i)).toHaveValue(null)
+      expect(screen.getByLabelText(/^Unité$/i)).toHaveValue('')
+    })
+  })
 })

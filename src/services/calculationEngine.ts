@@ -499,7 +499,6 @@ function createDefaultRegistry(): CalculationDefinition[] {
               runId: context.runId,
               instanceId: INSTANCE_ID,
               subscriptionId: sub.id,
-              subscriptionName: sub.name,
               reason,
             }),
           })
@@ -511,14 +510,16 @@ function createDefaultRegistry(): CalculationDefinition[] {
 
             // Journaliser les motifs de skip
             if (newDate === undefined) {
-              if (sub.renewalMode !== 'AUTOMATIC') {
+              if (sub.status === 'ENDED') {
+                logSkip('status-ended', sub)
+              } else if (sub.renewalMode === 'ROLLING') {
+                logSkip('no-distinct-renewal', sub)
+              } else if (sub.renewalMode !== 'AUTOMATIC') {
                 logSkip('mode-not-automatic', sub)
               } else if (!sub.renewalPeriodStartDate && !sub.subscriptionDate) {
                 logSkip('missing-anchor', sub)
               } else if (!sub.renewalIntervalUnit) {
                 logSkip('missing-renewal-cycle', sub)
-              } else if (sub.status === 'ENDED') {
-                logSkip('status-ended', sub)
               } else {
                 logSkip('unknown', sub)
               }
@@ -634,6 +635,10 @@ export function computeDefaultAlertForSub(sub: Subscription): {
   notify: boolean | undefined
   notifyDays: number | undefined
 } {
+  if (sub.renewalMode === 'ROLLING' || sub.renewalMode === 'UNKNOWN') {
+    return { notify: undefined, notifyDays: undefined }
+  }
+
   // Valeurs utilisateur déjà renseignées → conserver
   if (sub.notifyBeforeRenewal !== undefined && sub.notifyBeforeRenewalDays !== undefined) {
     return {

@@ -14,6 +14,7 @@ import {
   todayCivilDate,
 } from './civilDate'
 import { isValidCivilDate } from './subscriptionValidation'
+import { hasDistinctContractualRenewal } from './renewal'
 
 export interface ProjectedPaymentDraft {
   subscriptionId: string
@@ -155,6 +156,7 @@ export function projectSubscriptionPayments(
 
   let windowEnd = requestedWindowEnd ?? addIntervalToCivilDate(windowStart, 'MONTH', 12)
   if (
+    hasDistinctContractualRenewal(subscription) &&
     subscription.nextRenewalDate &&
     isValidCivilDate(subscription.nextRenewalDate) &&
     compareCivilDates(subscription.nextRenewalDate, windowEnd) < 0
@@ -173,11 +175,7 @@ export function projectSubscriptionPayments(
   }
 
   const first = findFirstOccurrenceOnOrAfter(anchor, stepUnit, stepCount, effectiveStart)
-  const maxOccurrences = stepUnit === 'YEAR'
-    ? 1
-    : stepUnit === 'MONTH'
-      ? Math.ceil(12 / stepCount)
-      : 366
+  const maxOccurrences = stepUnit === 'YEAR' ? 1 : 12
 
   for (let offset = 0; offset < maxOccurrences; offset++) {
     const candidateDate = occurrenceFromCivilDateAnchor(

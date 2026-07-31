@@ -109,7 +109,7 @@ export default function SubscriptionCardList({
                   <span className="card-date-value">{sub.nextChargeDate}</span>
                 </p>
               )}
-              {sub.nextRenewalDate && (
+              {sub.renewalMode !== 'ROLLING' && sub.nextRenewalDate && (
                 <p className="card-date">
                   <span className="card-date-label">Prochain renouvellement</span>
                   <span className="card-date-value">{sub.nextRenewalDate}</span>
@@ -121,7 +121,13 @@ export default function SubscriptionCardList({
               <div className="card-meta">
                 {categoryName && <span className="card-category">{categoryName}</span>}
                 <span className="card-renewal">
-                  {sub.renewalMode === 'AUTOMATIC' ? 'Renouv. auto' : sub.renewalMode === 'MANUAL' ? 'Renouv. manuel' : ''}
+                  {sub.renewalMode === 'ROLLING'
+                    ? 'Reconduction continue'
+                    : sub.renewalMode === 'AUTOMATIC'
+                      ? 'Renouv. auto'
+                      : sub.renewalMode === 'MANUAL'
+                        ? 'Renouv. manuel'
+                        : 'Inconnu'}
                 </span>
               </div>
               <div className="card-badges">

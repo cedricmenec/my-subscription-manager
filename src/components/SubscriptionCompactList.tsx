@@ -59,6 +59,19 @@ function formatMoney(amount: number, currency: string): string {
   }
 }
 
+function formatRenewal(subscription: Subscription): string {
+  switch (subscription.renewalMode) {
+    case 'ROLLING':
+      return 'Reconduction continue'
+    case 'AUTOMATIC':
+      return subscription.nextRenewalDate ?? 'Calcul automatique'
+    case 'MANUAL':
+      return subscription.nextRenewalDate ?? 'Renouvellement manuel'
+    case 'UNKNOWN':
+      return 'Inconnu'
+  }
+}
+
 interface SubscriptionCompactListProps {
   subscriptions: Subscription[]
   sortBy: CompactColumn
@@ -162,7 +175,7 @@ export default function SubscriptionCompactList({
                 </td>
                 <td>{formatInterval(sub.billingIntervalCount, sub.billingIntervalUnit)}</td>
                 <td>{sub.nextChargeDate ?? '—'}</td>
-                <td>{sub.nextRenewalDate ?? 'Calcul auto'}</td>
+                <td>{formatRenewal(sub)}</td>
                 <td>{getCategoryName(sub.categoryId)}</td>
                 <td className="compact-cell-actions">
                   <button

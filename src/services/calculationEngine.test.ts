@@ -101,6 +101,17 @@ describe('computeNextRenewalDateForSub - calcul de la date', () => {
     expect(result).toBe('2026-09-15')
   })
 
+  it('ne calcule aucune date pour ROLLING', () => {
+    expect(computeNextRenewalDateForSub({
+      ...base,
+      renewalMode: 'ROLLING',
+      renewalPeriodStartDate: '2026-01-15',
+      renewalIntervalUnit: 'MONTH',
+      renewalIntervalCount: 1,
+      nextRenewalDate: '2026-08-15',
+    }, '2026-07-29')).toBeUndefined()
+  })
+
   it('ne dérive pas vers la fin de mois après février', () => {
     const result = computeNextRenewalDateForSub(
       { ...base, renewalPeriodStartDate: '2026-01-30', renewalIntervalUnit: 'MONTH', renewalIntervalCount: 1 },
@@ -191,5 +202,15 @@ describe('computeDefaultAlertForSub', () => {
       { ...base, notifyBeforeRenewal: false, notifyBeforeRenewalDays: 14, renewalIntervalUnit: 'MONTH', renewalIntervalCount: 1 },
     )
     expect(result).toEqual({ notify: false, notifyDays: 14 })
+  })
+
+  it('nettoie les alertes pour une reconduction continue', () => {
+    const result = computeDefaultAlertForSub({
+      ...base,
+      renewalMode: 'ROLLING',
+      notifyBeforeRenewal: true,
+      notifyBeforeRenewalDays: 7,
+    })
+    expect(result).toEqual({ notify: undefined, notifyDays: undefined })
   })
 })

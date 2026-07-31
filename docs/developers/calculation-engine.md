@@ -2,6 +2,8 @@
 
 The local-first calculation engine rebuilds derived data from subscriptions, payments, and settings.
 
+For the complete projected schedule business rule, calendar examples, and reconciliation contract, see [Projected schedules](./projected-schedules.md).
+
 ## Main rules
 
 - Calculators declare explicit dependencies.
@@ -45,9 +47,9 @@ The helper functions live in `src/services/civilDate.ts`.
 `projectSubscriptionPayments` starts at the first billing occurrence on or after the reference date.
 
 - Yearly billing produces one future occurrence.
-- Monthly billing covers up to twelve months and at most `ceil(12 / intervalCount)` occurrences.
-- Daily and weekly billing cover up to twelve months, with a 366 occurrence safety cap.
-- `nextRenewalDate` is an inclusive upper bound.
+- Non-yearly billing produces at most twelve occurrences.
+- `ROLLING` and the identical automatic legacy cycle are not bounded by `nextRenewalDate`.
+- A distinct contractual `nextRenewalDate` is an inclusive upper bound.
 - `serviceEndDate` is also an inclusive upper bound.
 - A paused subscription resumes from `pauseUntil` when that date is deterministic.
 
@@ -113,6 +115,8 @@ The anchor order is:
 3. no calculation.
 
 Ended subscriptions and cancelled subscriptions past `serviceEndDate` have no future renewal. User-defined alert settings are preserved.
+
+`ROLLING` represents continuation until cancellation. Saving or importing it removes `renewalInterval*`, `renewalPeriodStartDate`, `nextRenewalDate`, and renewal alert fields. The calculator also clears residual dates and alerts. It emits stable skip reasons such as `no-distinct-renewal`, `mode-not-automatic`, `missing-anchor`, `missing-renewal-cycle`, and `status-ended`; logs contain identifiers and counters, not subscription names.
 
 ## Tests
 

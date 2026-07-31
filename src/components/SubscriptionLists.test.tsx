@@ -67,4 +67,32 @@ describe('accès à la fiche depuis les listes', () => {
     fireEvent.click(screen.getByRole('button', { name: '✎ Modifier' }))
     expect(onEdit).toHaveBeenCalledWith(subscription)
   })
+
+  it('distingue les quatre modes de continuation dans la liste compacte', () => {
+    render(
+      <SubscriptionCompactList
+        subscriptions={[
+          { ...subscription, id: 'rolling', name: 'Rolling', renewalMode: 'ROLLING' },
+          { ...subscription, id: 'automatic', name: 'Automatic', renewalMode: 'AUTOMATIC' },
+          { ...subscription, id: 'manual', name: 'Manual', renewalMode: 'MANUAL' },
+          { ...subscription, id: 'unknown', name: 'Unknown', renewalMode: 'UNKNOWN' },
+        ]}
+        sortBy="nextChargeDate"
+        sortDirection="asc"
+        onSort={vi.fn()}
+        onView={vi.fn()}
+        onEdit={vi.fn()}
+        onArchive={vi.fn()}
+        categories={[]}
+        excludedIds={[]}
+        excludedReasons={new Map()}
+        convertedIds={[]}
+      />,
+    )
+
+    expect(screen.getByText('Reconduction continue')).toBeInTheDocument()
+    expect(screen.getByText('Calcul automatique')).toBeInTheDocument()
+    expect(screen.getByText('Renouvellement manuel')).toBeInTheDocument()
+    expect(screen.getByText('Inconnu')).toBeInTheDocument()
+  })
 })

@@ -2,6 +2,8 @@
 
 La fiche détaillée rassemble les informations d’un abonnement et ses échéances financières.
 
+Pour une présentation complète des règles de génération, de recalcul et de protection des paiements réels, consultez [Comprendre les échéanciers prévisionnels](./echeanciers-previsionnels.md).
+
 ## Ouvrir une fiche
 
 Depuis la page **Abonnements**, utilisez **Voir** dans une ligne du tableau ou sur une carte. Le nom de l’abonnement ouvre également sa fiche.
@@ -20,11 +22,18 @@ La première carte met en évidence le **prochain paiement** avec :
 
 Si aucun paiement projeté n’est encore disponible, la fiche utilise la prochaine date de facturation enregistrée dans l’abonnement. Si aucune date n’est connue, elle indique qu’aucune échéance n’est disponible.
 
-Pour un abonnement à renouvellement automatique, une seconde carte affiche le **prochain renouvellement**. Le message **Date non calculable** signifie que les informations de période ou de cycle doivent être complétées.
+Le formulaire demande **« Comment l'abonnement se poursuit-il ? »** et propose quatre modes :
+
+- **Reconduction continue** : le service continue jusqu'à résiliation, sans date contractuelle distincte ;
+- **Renouvellement automatique à date fixe** : l'application calcule la prochaine date depuis le cycle contractuel ;
+- **Renouvellement manuel à date fixe** : la date est pilotée par l'utilisateur ;
+- **Inconnu** : les informations disponibles ne permettent pas encore de qualifier la continuation.
+
+Pour un renouvellement automatique contractuel, une seconde carte affiche le **prochain renouvellement**. Le message **Date non calculable** signifie que les informations de période ou de cycle doivent être complétées. Une reconduction continue n'affiche pas cette carte : la prochaine facturation reste visible séparément.
 
 La section **Prochaines échéances** présente jusqu’à douze paiements prévus, dans l’ordre chronologique.
 
-Pour une facturation mensuelle sans borne de renouvellement, l’application prépare normalement les douze prochaines mensualités. Si une date de renouvellement ou de fin de service est connue, l’échéancier s’arrête à cette date, en l’incluant lorsqu’un paiement est prévu ce jour-là. Une facturation annuelle affiche uniquement sa prochaine échéance.
+Pour une facturation mensuelle continue, l’application prépare normalement les douze prochaines mensualités. Un contrat annuel payé mensuellement s'arrête au renouvellement contractuel inclus, avec un maximum de douze mensualités. La fin de service reste toujours prioritaire. Une facturation annuelle affiche uniquement sa prochaine échéance.
 
 ## Vérifier une échéance passée
 

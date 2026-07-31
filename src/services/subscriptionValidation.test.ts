@@ -55,6 +55,16 @@ describe('isValidCivilDate', () => {
 })
 
 describe('validateSubscriptionInput - coherence rules', () => {
+  it('exige un cycle et une ancre pour AUTOMATIC', () => {
+    const result = validateSubscriptionInput({
+      name: 'Test',
+      status: 'ACTIVE',
+      renewalMode: 'AUTOMATIC',
+    })
+    expect(result.errors.renewalInterval).toContain('obligatoire')
+    expect(result.errors.subscriptionDate).toContain('obligatoire')
+  })
+
   it('accepte nextChargeDate avant nextRenewalDate', () => {
     const result = validateSubscriptionInput({
       name: 'Test',
@@ -64,6 +74,7 @@ describe('validateSubscriptionInput - coherence rules', () => {
       billingIntervalCount: 1,
       renewalIntervalUnit: 'MONTH',
       renewalIntervalCount: 1,
+      subscriptionDate: '2026-01-01',
       nextChargeDate: '2026-07-15',
       nextRenewalDate: '2026-08-01',
     })
@@ -71,7 +82,7 @@ describe('validateSubscriptionInput - coherence rules', () => {
     expect(result.isValid).toBe(true)
   })
 
-  it('rejette nextChargeDate après nextRenewalDate quand les intervalles sont identiques', () => {
+  it('ignore la gate pour un ancien renouvellement automatique identique à la facturation', () => {
     const result = validateSubscriptionInput({
       name: 'Test',
       status: 'ACTIVE',
@@ -80,12 +91,13 @@ describe('validateSubscriptionInput - coherence rules', () => {
       billingIntervalCount: 1,
       renewalIntervalUnit: 'MONTH',
       renewalIntervalCount: 1,
+      subscriptionDate: '2026-01-01',
       nextChargeDate: '2026-08-15',
       nextRenewalDate: '2026-08-01',
     })
 
-    expect(result.isValid).toBe(false)
-    expect(result.errors.nextChargeDate).toContain('échéance')
+    expect(result.isValid).toBe(true)
+    expect(result.errors.nextChargeDate).toBeUndefined()
   })
 
   it('rejette nextChargeDate après nextRenewalDate indépendamment des intervalles', () => {
@@ -112,6 +124,8 @@ describe('validateSubscriptionInput - coherence rules', () => {
       renewalMode: 'AUTOMATIC',
       subscriptionDate: '2026-01-15',
       renewalPeriodStartDate: '2026-06-15',
+      renewalIntervalUnit: 'YEAR',
+      renewalIntervalCount: 1,
     })
 
     expect(result.isValid).toBe(true)

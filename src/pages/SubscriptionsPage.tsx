@@ -28,7 +28,7 @@ const STATUS_OPTIONS: SubscriptionStatus[] = [
   'TRIAL', 'ACTIVE', 'PAUSED', 'CANCELLED_PENDING_END', 'ENDED', 'UNKNOWN',
 ]
 
-const RENEWAL_OPTIONS: RenewalMode[] = ['AUTOMATIC', 'MANUAL', 'UNKNOWN']
+const RENEWAL_OPTIONS: RenewalMode[] = ['ROLLING', 'AUTOMATIC', 'MANUAL', 'UNKNOWN']
 
 const STATUS_LABELS: Record<SubscriptionStatus, string> = {
   TRIAL: 'Essai',
@@ -40,8 +40,9 @@ const STATUS_LABELS: Record<SubscriptionStatus, string> = {
 }
 
 const RENEWAL_LABELS: Record<RenewalMode, string> = {
-  AUTOMATIC: 'Automatique',
-  MANUAL: 'Manuel',
+  ROLLING: 'Reconduction continue',
+  AUTOMATIC: 'Renouvellement automatique',
+  MANUAL: 'Renouvellement manuel',
   UNKNOWN: 'Inconnu',
 }
 

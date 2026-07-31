@@ -3,8 +3,9 @@ import {
   type RenewalMode,
   type SubscriptionStatus,
 } from '../data/db'
+import { hasDistinctContractualRenewal } from './renewal'
 
-const VALID_RENEWAL_MODES: RenewalMode[] = ['AUTOMATIC', 'MANUAL', 'UNKNOWN']
+const VALID_RENEWAL_MODES: RenewalMode[] = ['ROLLING', 'AUTOMATIC', 'MANUAL', 'UNKNOWN']
 const VALID_SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
   'TRIAL',
   'ACTIVE',
@@ -116,6 +117,15 @@ export function validateSubscriptionInput(
     'billingInterval',
     errors,
   )
+
+  if (input.renewalMode === 'AUTOMATIC') {
+    if (!input.renewalIntervalUnit || !input.renewalIntervalCount) {
+      errors.renewalInterval = 'Le cycle de renouvellement contractuel est obligatoire.'
+    }
+    if (!input.renewalPeriodStartDate && !input.subscriptionDate) {
+      errors.subscriptionDate = 'Une date d’ancrage du renouvellement est obligatoire.'
+    }
+  }
   validateIntervalPair(
     input.commitmentIntervalUnit,
     input.commitmentIntervalCount,
@@ -175,6 +185,7 @@ export function validateSubscriptionInput(
 
   // Règle de gate : nextChargeDate ne peut pas être après nextRenewalDate
   if (
+    hasDistinctContractualRenewal(input) &&
     input.nextChargeDate &&
     input.nextRenewalDate &&
     input.nextChargeDate > input.nextRenewalDate

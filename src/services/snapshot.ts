@@ -1,4 +1,10 @@
-import { db, type SnapshotEnvelope, type SubscriptionDatabase } from '../data/db'
+import { db, type RenewalMode, type SnapshotEnvelope, type SubscriptionDatabase } from '../data/db'
+import { normalizeSubscriptionContinuation } from './renewal'
+
+const SYNCED_ENTITY_DATE_FIELDS = ['createdAt', 'updatedAt', 'deletedAt'] as const
+const SUBSCRIPTION_DATE_FIELDS = [...SYNCED_ENTITY_DATE_FIELDS, 'archivedAt'] as const
+const PAYMENT_DATE_FIELDS = [...SYNCED_ENTITY_DATE_FIELDS, 'correctedAt'] as const
+const VALID_RENEWAL_MODES: RenewalMode[] = ['ROLLING', 'AUTOMATIC', 'MANUAL', 'UNKNOWN']
 
 export class SnapshotValidationError extends Error {
   constructor(message: string) {
@@ -31,6 +37,39 @@ export async function exportSnapshot(
       settings,
     },
   }
+}
+
+function reviveEntityDates<T>(
+  entity: T,
+  fields: readonly string[],
+  location: string,
+): T {
+  if (!entity || typeof entity !== 'object') {
+    throw new SnapshotValidationError(`${location} doit être un objet.`)
+  }
+
+  const revived = { ...entity } as Record<string, unknown>
+
+  for (const field of fields) {
+    const value = revived[field]
+    if (value === undefined) continue
+
+    const date = value instanceof Date
+      ? value
+      : typeof value === 'string' || typeof value === 'number'
+        ? new Date(value)
+        : undefined
+
+    if (!date || Number.isNaN(date.getTime())) {
+      throw new SnapshotValidationError(
+        `${location}.${field} contient une date invalide.`,
+      )
+    }
+
+    revived[field] = date
+  }
+
+  return revived as T
 }
 
 /**
@@ -78,7 +117,47 @@ export function validateSnapshot(raw: unknown): SnapshotEnvelope {
     throw new SnapshotValidationError('La section data.settings est manquante ou invalide.')
   }
 
-  return envelope as unknown as SnapshotEnvelope
+  const snapshot = envelope as unknown as SnapshotEnvelope
+
+  return {
+    ...snapshot,
+    data: {
+      subscriptions: snapshot.data.subscriptions.map((subscription, index) => {
+        const revived = reviveEntityDates(
+          subscription,
+          SUBSCRIPTION_DATE_FIELDS,
+          `data.subscriptions[${index}]`,
+        )
+        if (!VALID_RENEWAL_MODES.includes(revived.renewalMode)) {
+          throw new SnapshotValidationError(
+            `data.subscriptions[${index}].renewalMode contient une valeur inconnue.`,
+          )
+        }
+        return normalizeSubscriptionContinuation(revived, { normalizeLegacy: true })
+      }),
+      categories: snapshot.data.categories.map((category, index) =>
+        reviveEntityDates(
+          category,
+          SYNCED_ENTITY_DATE_FIELDS,
+          `data.categories[${index}]`,
+        ),
+      ),
+      payments: snapshot.data.payments.map((payment, index) =>
+        reviveEntityDates(
+          payment,
+          PAYMENT_DATE_FIELDS,
+          `data.payments[${index}]`,
+        ),
+      ),
+      settings: snapshot.data.settings.map((settings, index) =>
+        reviveEntityDates(
+          settings,
+          SYNCED_ENTITY_DATE_FIELDS,
+          `data.settings[${index}]`,
+        ),
+      ),
+    },
+  }
 }
 
 /**
@@ -120,7 +199,10 @@ export async function restoreSnapshot(
 
       // Import snapshot data
       for (const sub of snapshot.data.subscriptions) {
-        await database.subscriptions.put({ ...sub, deletedAt: undefined })
+        await database.subscriptions.put(normalizeSubscriptionContinuation({
+          ...sub,
+          deletedAt: undefined,
+        }, { normalizeLegacy: true }))
       }
       for (const cat of snapshot.data.categories) {
         await database.categories.put({ ...cat, deletedAt: undefined })

@@ -7,25 +7,25 @@ Calculateur idempotent du moteur de calcul pour la détermination automatique de
 
 ### Requirement: Calcul idempotent de nextRenewalDate
 
-Le calculateur `next-renewal-date` SHALL calculer la date de prochain renouvellement pour chaque abonnement en renouvellement automatique, en ajoutant cycliquement le `renewalInterval` à partir de l'ancre la plus pertinente, et SHALL n'écrire en base que si la valeur calculée diffère de la valeur stockée (idempotence).
+Le calculateur `next-renewal-date` SHALL calculer `nextRenewalDate` uniquement pour un renouvellement contractuel `AUTOMATIC`, en ajoutant cycliquement `renewalInterval` depuis l'ancre pertinente, et SHALL n'écrire que si l'état calculé diffère. Pour `ROLLING`, il SHALL nettoyer toute date contractuelle résiduelle sans tenter de calcul.
 
 #### Scenario: Calcul à partir de renewalPeriodStartDate (prioritaire)
 
 - **WHEN** l'abonnement a `renewalMode=AUTOMATIC`, `renewalIntervalCount=1`, `renewalIntervalUnit=MONTH`, et `renewalPeriodStartDate=2026-06-15`
 - **AND** la date courante est 2026-07-29
-- **THEN** `nextRenewalDate` est calculé à 2026-08-15 (2026-06-15 + 1 mois + 1 mois pour dépasser aujourd'hui)
+- **THEN** `nextRenewalDate` est calculé à 2026-08-15
 
 #### Scenario: Fallback sur subscriptionDate si renewalPeriodStartDate absent
 
 - **WHEN** l'abonnement a `renewalMode=AUTOMATIC`, `subscriptionDate=2025-01-31`, `renewalPeriodStartDate` absent, `renewalIntervalCount=1`, `renewalIntervalUnit=YEAR`
 - **AND** la date courante est 2026-07-29
-- **THEN** `nextRenewalDate` est calculé à 2027-01-31 (2025-01-31 + 1 an + 1 an pour dépasser aujourd'hui)
+- **THEN** `nextRenewalDate` est calculé à 2027-01-31
 
 #### Scenario: Ancre absente → pas de calcul avec log de diagnostic
 
-- **WHEN** l'abonnement a `renewalMode=AUTOMATIC` mais ni `subscriptionDate` ni `renewalPeriodStartDate` ne sont renseignés
+- **WHEN** l'abonnement a `renewalMode=AUTOMATIC` mais aucune ancre de renouvellement
 - **THEN** le calculateur ne modifie pas `nextRenewalDate`
-- **AND** un log de diagnostic `next-renewal-date-skip` est écrit avec la raison `missing-anchor`
+- **AND** écrit `next-renewal-date-skip` avec `missing-anchor`
 
 #### Scenario: Cycle de renouvellement absent → pas de calcul avec log de diagnostic
 
@@ -36,9 +36,21 @@ Le calculateur `next-renewal-date` SHALL calculer la date de prochain renouvelle
 
 #### Scenario: Pas d'écriture si identique
 
-- **WHEN** la valeur stockée de `nextRenewalDate` est déjà 2026-08-15
-- **AND** le calcul aboutit à 2026-08-15
-- **THEN** aucune écriture n'est effectuée dans la table `subscriptions` pour cet abonnement
+- **WHEN** tous les champs calculés ou nettoyés ont déjà leur valeur cible
+- **THEN** aucune écriture n'est effectuée dans `subscriptions`
+
+#### Scenario: Cycle de renouvellement absent → pas de fallback
+
+- **WHEN** l'abonnement a `renewalMode=AUTOMATIC` et une ancre mais aucun cycle de renouvellement
+- **THEN** le calculateur ne modifie pas `nextRenewalDate`
+- **AND** écrit `next-renewal-date-skip` avec `missing-renewal-cycle`
+- **AND** n'utilise pas le cycle de facturation comme fallback
+
+#### Scenario: Reconduction continue nettoyée
+
+- **WHEN** l'abonnement a `renewalMode=ROLLING` et une ancienne `nextRenewalDate`
+- **THEN** `nextRenewalDate` est mise à `undefined`
+- **AND** aucun prochain renouvellement contractuel n'est calculé
 
 ### Requirement: Règles d'arrêt selon le statut
 
@@ -70,35 +82,36 @@ Le calculateur SHALL mettre `nextRenewalDate` à `undefined` pour les abonnement
 
 ### Requirement: Production des indicateurs d'alerte de renouvellement
 
-Le calculateur SHALL déterminer, pour chaque abonnement traité, les valeurs par défaut de `notifyBeforeRenewal` et `notifyBeforeRenewalDays` selon la règle de cycle, et SHALL les écrire uniquement si les champs ne sont pas déjà renseignés par l'utilisateur.
+Le calculateur SHALL déterminer les valeurs par défaut de `notifyBeforeRenewal` et `notifyBeforeRenewalDays` uniquement pour un renouvellement contractuel, sans écraser les choix utilisateur. Il SHALL nettoyer ces champs pour `ROLLING`.
 
 #### Scenario: Alerte par défaut pour cycle mensuel
 
-- **WHEN** l'abonnement a `renewalIntervalUnit=MONTH`, `renewalIntervalCount=1`, et `notifyBeforeRenewal` n'est pas renseigné
-- **THEN** `notifyBeforeRenewal` est positionné à `true` (opt-in)
-- **AND** `notifyBeforeRenewalDays` est positionné à 7
+- **WHEN** un renouvellement contractuel a un cycle mensuel et aucune préférence renseignée
+- **THEN** `notifyBeforeRenewal=true` et `notifyBeforeRenewalDays=7`
 
 #### Scenario: Alerte par défaut pour cycle annuel
 
-- **WHEN** l'abonnement a `renewalIntervalUnit=YEAR` (ou `renewalIntervalCount≥6` mois équivalent) et `notifyBeforeRenewal` n'est pas renseigné
-- **THEN** `notifyBeforeRenewal` est positionné à `false` (opt-out)
-- **AND** `notifyBeforeRenewalDays` est positionné à 30
+- **WHEN** un renouvellement contractuel a un cycle annuel et aucune préférence renseignée
+- **THEN** `notifyBeforeRenewal=false` et `notifyBeforeRenewalDays=30`
 
 #### Scenario: Alerte par défaut pour mode MANUAL
 
-- **WHEN** l'abonnement a `renewalMode=MANUAL` et `notifyBeforeRenewal` n'est pas renseigné
-- **THEN** `notifyBeforeRenewal` est positionné à `true` (always)
-- **AND** `notifyBeforeRenewalDays` est positionné à 7
+- **WHEN** l'abonnement a `renewalMode=MANUAL` et aucune préférence renseignée
+- **THEN** `notifyBeforeRenewal=true` et `notifyBeforeRenewalDays=7`
 
 #### Scenario: Valeurs utilisateur conservées
 
-- **WHEN** l'abonnement a `notifyBeforeRenewal=false` et `notifyBeforeRenewalDays=14` déjà renseignés
+- **WHEN** un renouvellement contractuel a déjà `notifyBeforeRenewal=false` et `notifyBeforeRenewalDays=14`
 - **THEN** le calculateur ne modifie pas ces valeurs
-- **AND** les préférences utilisateur sont respectées
+
+#### Scenario: Aucune alerte contractuelle en reconduction continue
+
+- **WHEN** `renewalMode=ROLLING`
+- **THEN** les deux champs d'alerte de renouvellement sont mis à `undefined`
 
 ### Requirement: Logs de diagnostic pour les motifs de skip
 
-Le calculateur `next-renewal-date` SHALL écrire un log de diagnostic dédié avec `event=next-renewal-date-skip` pour chaque abonnement pour lequel `computeNextRenewalDateForSub` retourne `undefined`, avec la raison exacte dans le message.
+Le calculateur `next-renewal-date` SHALL écrire un diagnostic `next-renewal-date-skip` avec une raison stable lorsqu'il ne calcule pas de renouvellement contractuel. `ROLLING` SHALL être distingué d'une donnée automatique incomplète.
 
 #### Scenario: Log de skip pour mode non automatique
 
@@ -109,20 +122,28 @@ Le calculateur `next-renewal-date` SHALL écrire un log de diagnostic dédié av
 #### Scenario: Log de skip pour statut ENDED
 
 - **WHEN** l'abonnement a `status=ENDED`
-- **THEN** le calculateur ajoute `next-renewal-date-skip` avec `reason=status-ended`
-- **AND** `nextRenewalDate` n'est pas modifié
+- **THEN** le diagnostic porte `reason=status-ended`
 
 #### Scenario: Log de skip pour absence d'ancre
 
-- **WHEN** l'abonnement a `renewalMode=AUTOMATIC` mais ni `subscriptionDate` ni `renewalPeriodStartDate`
-- **THEN** le calculateur ajoute `next-renewal-date-skip` avec `reason=missing-anchor`
-- **AND** `nextRenewalDate` n'est pas modifié
+- **WHEN** un abonnement `AUTOMATIC` n'a aucune ancre
+- **THEN** le diagnostic porte `reason=missing-anchor`
 
 #### Scenario: Log de skip pour absence de cycle de renouvellement
 
-- **WHEN** l'abonnement a `renewalMode=AUTOMATIC`, une ancre présente, mais `renewalIntervalUnit` absent
-- **THEN** le calculateur ajoute `next-renewal-date-skip` avec `reason=missing-renewal-cycle`
-- **AND** `nextRenewalDate` n'est pas modifié
+- **WHEN** un abonnement `AUTOMATIC` a une ancre mais aucun cycle de renouvellement
+- **THEN** le diagnostic porte `reason=missing-renewal-cycle`
+
+#### Scenario: Log de skip pour mode sans calcul automatique
+
+- **WHEN** l'abonnement a `renewalMode=MANUAL` ou `renewalMode=UNKNOWN`
+- **THEN** le diagnostic porte `reason=mode-not-automatic`
+
+#### Scenario: Log informatif pour reconduction continue
+
+- **WHEN** l'abonnement a `renewalMode=ROLLING`
+- **THEN** le diagnostic porte `reason=no-distinct-renewal`
+- **AND** l'absence de cycle de renouvellement n'est pas signalée comme erreur
 
 ### Requirement: Déclencheurs du calculateur
 

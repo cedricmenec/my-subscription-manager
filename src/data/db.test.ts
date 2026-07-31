@@ -23,7 +23,7 @@ describe('SubscriptionDatabase', () => {
       cloudUrl: 'https://invalid.dexie.cloud',
     })
 
-    expect(testDb.verno).toBe(8)
+    expect(testDb.verno).toBe(9)
     expect(testDb.tables.map(table => table.name)).toEqual(
       expect.arrayContaining([
         'subscriptions',
@@ -86,7 +86,7 @@ describe('SubscriptionDatabase', () => {
     expect(migrated?.billingIntervalCount).toBe(1)
     expect(migrated?.renewalIntervalUnit).toBe('MONTH')
     expect(migrated?.renewalIntervalCount).toBe(1)
-    expect(migrated?.schemaVersion).toBe(8)
+    expect(migrated?.schemaVersion).toBe(9)
 
     upgradedDb.close()
   })
@@ -142,7 +142,7 @@ describe('SubscriptionDatabase', () => {
 
     const migratedSub = await upgradedDb.subscriptions.get('sbs-v4-test-1')
     expect(migratedSub?.currentPrice).toBe(15)
-    expect(migratedSub?.schemaVersion).toBe(8)
+    expect(migratedSub?.schemaVersion).toBe(9)
 
     const migratedPayment = await upgradedDb.payments.get('pym-v4-test-1')
     expect(migratedPayment?.amount.amount).toBe(15)
@@ -206,13 +206,104 @@ describe('SubscriptionDatabase', () => {
     expect(migratedSub?.currentPrice).toBe(15.00)
     expect((migratedSub as unknown as Record<string, unknown>).currentPriceMinor).toBeUndefined()
     expect((migratedSub as unknown as Record<string, unknown>).billingInterval).toBeUndefined()
-    expect(migratedSub?.schemaVersion).toBe(8)
+    expect(migratedSub?.schemaVersion).toBe(9)
 
     const migratedPayment = await upgradedDb.payments.get('pym-v5-test-1')
     expect(migratedPayment?.amount.amount).toBe(15.00)
     expect((migratedPayment?.amount as unknown as Record<string, unknown>).amountMinor).toBeUndefined()
     expect(migratedPayment?.schemaVersion).toBe(8)
 
+    upgradedDb.close()
+  })
+
+  it('migre en v9 uniquement les reconductions continues déterministes sans toucher aux paiements', async () => {
+    const dbName = `migration-v9-db-${crypto.randomUUID()}`
+    createdDbNames.push(dbName)
+
+    class V8Db extends Dexie {
+      constructor(name: string) {
+        super(name)
+        this.version(8).stores({
+          subscriptions: 'id, status, categoryId, renewalMode, billingIntervalUnit, nextChargeDate, nextRenewalDate, updatedAt, archivedAt, deletedAt',
+          categories: 'id, &name, sortOrder, updatedAt',
+          payments: 'id, subscriptionId, scheduledDate, paidDate, status, [subscriptionId+scheduledDate], updatedAt, deletedAt',
+          settings: 'id, &key, updatedAt',
+          localSettings: '&key, updatedAt',
+          diagnosticLogs: '++id, timestamp, category',
+          calculationState: '&key, updatedAt',
+          importPreview: '&id, rowNumber, status',
+          drafts: '&id, entityType, updatedAt',
+        })
+      }
+    }
+
+    const timestamp = new Date('2026-07-01T10:00:00Z')
+    const v8Db = new V8Db(dbName)
+    await v8Db.open()
+    await v8Db.table('subscriptions').bulkPut([
+      {
+        id: 'sbs-deterministic', name: 'Continu', status: 'ACTIVE',
+        renewalMode: 'AUTOMATIC', billingIntervalUnit: 'MONTH', billingIntervalCount: 1,
+        renewalIntervalUnit: 'MONTH', renewalIntervalCount: 1,
+        nextChargeDate: '2026-08-15', nextRenewalDate: '2026-08-15',
+        renewalPeriodStartDate: '2026-01-15', notifyBeforeRenewal: true,
+        notifyBeforeRenewalDays: 7, createdAt: timestamp, updatedAt: timestamp, schemaVersion: 8,
+      },
+      {
+        id: 'sbs-annual', name: 'Annuel', status: 'ACTIVE',
+        renewalMode: 'AUTOMATIC', billingIntervalUnit: 'YEAR', billingIntervalCount: 1,
+        renewalIntervalUnit: 'YEAR', renewalIntervalCount: 1,
+        nextChargeDate: '2027-01-01', nextRenewalDate: '2027-01-01',
+        createdAt: timestamp, updatedAt: timestamp, schemaVersion: 8,
+      },
+      {
+        id: 'sbs-ambiguous', name: 'Ambigu', status: 'ACTIVE',
+        renewalMode: 'AUTOMATIC', billingIntervalUnit: 'MONTH', billingIntervalCount: 1,
+        renewalIntervalUnit: 'MONTH', renewalIntervalCount: 1,
+        nextChargeDate: '2026-08-15', nextRenewalDate: '2026-09-15',
+        createdAt: timestamp, updatedAt: timestamp, schemaVersion: 8,
+      },
+    ])
+    await v8Db.table('payments').put({
+      id: 'pym-real', subscriptionId: 'sbs-deterministic', scheduledDate: '2026-07-15',
+      paidDate: '2026-07-15', status: 'CONFIRMED_PAID', amount: { amount: 12, currency: 'EUR' },
+      source: 'IMPORTED', notes: 'preuve conservée', createdAt: timestamp, updatedAt: timestamp,
+      schemaVersion: 8,
+    })
+    v8Db.close()
+
+    let upgradedDb = new SubscriptionDatabase({ name: dbName, skipCloud: true })
+    await upgradedDb.open()
+
+    const deterministic = await upgradedDb.subscriptions.get('sbs-deterministic')
+    expect(deterministic).toMatchObject({
+      renewalMode: 'ROLLING',
+      billingIntervalUnit: 'MONTH',
+      billingIntervalCount: 1,
+      schemaVersion: 9,
+    })
+    expect(deterministic?.renewalIntervalUnit).toBeUndefined()
+    expect(deterministic?.nextRenewalDate).toBeUndefined()
+    expect((await upgradedDb.subscriptions.get('sbs-annual'))?.renewalMode).toBe('AUTOMATIC')
+    expect((await upgradedDb.subscriptions.get('sbs-ambiguous'))?.renewalMode).toBe('AUTOMATIC')
+    expect((await upgradedDb.diagnosticLogs.toArray()).map(log => log.message)).toContain(
+      JSON.stringify({
+        event: 'rolling-migration-review',
+        subscriptionId: 'sbs-ambiguous',
+        reason: 'ambiguous-legacy-continuation',
+      }),
+    )
+    expect(await upgradedDb.payments.get('pym-real')).toMatchObject({
+      status: 'CONFIRMED_PAID',
+      source: 'IMPORTED',
+      notes: 'preuve conservée',
+      amount: { amount: 12, currency: 'EUR' },
+    })
+
+    upgradedDb.close()
+    upgradedDb = new SubscriptionDatabase({ name: dbName, skipCloud: true })
+    await upgradedDb.open()
+    expect(await upgradedDb.subscriptions.get('sbs-deterministic')).toEqual(deterministic)
     upgradedDb.close()
   })
 })

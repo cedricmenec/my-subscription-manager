@@ -9,12 +9,13 @@ import {
 } from '../data/db'
 import { parseCsv, csvRowsToObjects, generateCsv } from './csvParser'
 import { isValidCivilDate } from './subscriptionValidation'
+import { normalizeSubscriptionContinuation } from './renewal'
 
 const VALID_STATUSES: SubscriptionStatus[] = [
   'TRIAL', 'ACTIVE', 'PAUSED', 'CANCELLED_PENDING_END', 'ENDED', 'UNKNOWN',
 ]
 
-const VALID_RENEWAL_MODES: RenewalMode[] = ['AUTOMATIC', 'MANUAL', 'UNKNOWN']
+const VALID_RENEWAL_MODES: RenewalMode[] = ['ROLLING', 'AUTOMATIC', 'MANUAL', 'UNKNOWN']
 
 const VALID_INTERVAL_UNITS: IntervalUnit[] = ['DAY', 'WEEK', 'MONTH', 'YEAR']
 
@@ -22,7 +23,10 @@ const CSV_SUBSCRIPTION_HEADERS = [
   'name', 'provider', 'planName', 'categoryId', 'status',
   'currentPrice', 'currency', 'billingIntervalUnit', 'billingIntervalCount',
   'commitmentIntervalUnit', 'commitmentIntervalCount',
-  'renewalMode', 'nextChargeDate', 'startDate', 'pauseUntil', 'serviceEndDate',
+  'renewalMode', 'renewalIntervalUnit', 'renewalIntervalCount',
+  'subscriptionDate', 'renewalPeriodStartDate', 'nextRenewalDate',
+  'notifyBeforeRenewal', 'notifyBeforeRenewalDays',
+  'nextChargeDate', 'startDate', 'pauseUntil', 'serviceEndDate',
   'managementUrl', 'cancellationUrl', 'cancellationInstructions', 'notes',
 ]
 
@@ -113,8 +117,37 @@ export async function previewCsvImport(
       }
     }
 
+    if (row.renewalIntervalUnit && row.renewalIntervalUnit.trim()) {
+      if (!VALID_INTERVAL_UNITS.includes(row.renewalIntervalUnit as IntervalUnit)) {
+        rowErrors.push(`Unité de renouvellement invalide: "${row.renewalIntervalUnit}".`)
+      }
+    }
+
+    if (row.renewalIntervalCount && row.renewalIntervalCount.trim()) {
+      const count = Number(row.renewalIntervalCount)
+      if (!Number.isInteger(count) || count <= 0) {
+        rowErrors.push(`Nombre de renouvellement invalide: "${row.renewalIntervalCount}".`)
+      }
+    }
+
+    if (
+      row.notifyBeforeRenewal &&
+      !['true', 'false'].includes(row.notifyBeforeRenewal.trim().toLowerCase())
+    ) {
+      rowErrors.push(`Préférence d'alerte invalide: "${row.notifyBeforeRenewal}".`)
+    }
+    if (row.notifyBeforeRenewalDays?.trim()) {
+      const days = Number(row.notifyBeforeRenewalDays)
+      if (!Number.isInteger(days) || days < 0) {
+        rowErrors.push(`Délai d'alerte invalide: "${row.notifyBeforeRenewalDays}".`)
+      }
+    }
+
     // Validate dates
-    const dateFields = ['nextChargeDate', 'startDate', 'pauseUntil', 'serviceEndDate'] as const
+    const dateFields = [
+      'nextChargeDate', 'nextRenewalDate', 'subscriptionDate',
+      'renewalPeriodStartDate', 'startDate', 'pauseUntil', 'serviceEndDate',
+    ] as const
     for (const field of dateFields) {
       if (row[field] && row[field].trim()) {
         if (!isValidCivilDate(row[field])) {
@@ -189,7 +222,7 @@ export async function confirmCsvImport(
 
       const row = entry.data
 
-      const subscription: Subscription = {
+      const subscription = normalizeSubscriptionContinuation<Subscription>({
         id: createEntityId('sbs'),
         name: row.name.trim(),
         provider: row.provider?.trim() || undefined,
@@ -203,6 +236,17 @@ export async function confirmCsvImport(
         billingIntervalCount: row.billingIntervalCount?.trim() ? Number(row.billingIntervalCount) : undefined,
         commitmentIntervalUnit: (row.commitmentIntervalUnit?.trim() as IntervalUnit) || undefined,
         commitmentIntervalCount: row.commitmentIntervalCount?.trim() ? Number(row.commitmentIntervalCount) : undefined,
+        renewalIntervalUnit: (row.renewalIntervalUnit?.trim() as IntervalUnit) || undefined,
+        renewalIntervalCount: row.renewalIntervalCount?.trim() ? Number(row.renewalIntervalCount) : undefined,
+        subscriptionDate: row.subscriptionDate?.trim() || undefined,
+        renewalPeriodStartDate: row.renewalPeriodStartDate?.trim() || undefined,
+        nextRenewalDate: row.nextRenewalDate?.trim() || undefined,
+        notifyBeforeRenewal: row.notifyBeforeRenewal?.trim()
+          ? row.notifyBeforeRenewal.trim().toLowerCase() === 'true'
+          : undefined,
+        notifyBeforeRenewalDays: row.notifyBeforeRenewalDays?.trim()
+          ? Number(row.notifyBeforeRenewalDays)
+          : undefined,
         nextChargeDate: row.nextChargeDate?.trim() || undefined,
         startDate: row.startDate?.trim() || undefined,
         pauseUntil: row.pauseUntil?.trim() || undefined,
@@ -213,8 +257,8 @@ export async function confirmCsvImport(
         notes: row.notes?.trim() || undefined,
         createdAt: now,
         updatedAt: now,
-        schemaVersion: 6,
-      }
+        schemaVersion: 9,
+      }, { normalizeLegacy: true })
 
       await database.subscriptions.put(subscription)
       created++
@@ -258,6 +302,13 @@ export async function exportSubscriptionsCsv(
     sub.commitmentIntervalUnit ?? '',
     sub.commitmentIntervalCount ? String(sub.commitmentIntervalCount) : '',
     sub.renewalMode,
+    sub.renewalIntervalUnit ?? '',
+    sub.renewalIntervalCount ? String(sub.renewalIntervalCount) : '',
+    sub.subscriptionDate ?? '',
+    sub.renewalPeriodStartDate ?? '',
+    sub.nextRenewalDate ?? '',
+    sub.notifyBeforeRenewal === undefined ? '' : String(sub.notifyBeforeRenewal),
+    sub.notifyBeforeRenewalDays === undefined ? '' : String(sub.notifyBeforeRenewalDays),
     sub.nextChargeDate ?? '',
     sub.startDate ?? '',
     sub.pauseUntil ?? '',
