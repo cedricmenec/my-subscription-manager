@@ -3,9 +3,9 @@ import {
   type RenewalMode,
   type SubscriptionStatus,
 } from '../data/db'
-import { hasDistinctContractualRenewal } from './renewal'
+import { hasEngagement } from './renewal'
 
-const VALID_RENEWAL_MODES: RenewalMode[] = ['ROLLING', 'AUTOMATIC', 'MANUAL', 'UNKNOWN']
+const VALID_RENEWAL_MODES: RenewalMode[] = ['ROLLING', 'AUTOMATIC', 'UNKNOWN']
 const VALID_SUBSCRIPTION_STATUSES: SubscriptionStatus[] = [
   'TRIAL',
   'ACTIVE',
@@ -33,12 +33,9 @@ export interface SubscriptionFormInput {
   billingIntervalCount?: number
   commitmentIntervalUnit?: IntervalUnit
   commitmentIntervalCount?: number
-  renewalIntervalUnit?: IntervalUnit
-  renewalIntervalCount?: number
   nextChargeDate?: string
   nextRenewalDate?: string
   subscriptionDate?: string
-  renewalPeriodStartDate?: string
   commitmentStartDate?: string
   pauseStartDate?: string
   pauseUntil?: string
@@ -119,23 +116,17 @@ export function validateSubscriptionInput(
   )
 
   if (input.renewalMode === 'AUTOMATIC') {
-    if (!input.renewalIntervalUnit || !input.renewalIntervalCount) {
-      errors.renewalInterval = 'Le cycle de renouvellement contractuel est obligatoire.'
+    if (!input.commitmentIntervalUnit || !input.commitmentIntervalCount) {
+      errors.commitmentInterval = 'Le cycle d\'engagement est obligatoire.'
     }
-    if (!input.renewalPeriodStartDate && !input.subscriptionDate) {
-      errors.subscriptionDate = 'Une date d’ancrage du renouvellement est obligatoire.'
+    if (!input.commitmentStartDate && !input.subscriptionDate) {
+      errors.subscriptionDate = 'Une date d\'ancrage de l\'engagement est obligatoire.'
     }
   }
   validateIntervalPair(
     input.commitmentIntervalUnit,
     input.commitmentIntervalCount,
     'commitmentInterval',
-    errors,
-  )
-  validateIntervalPair(
-    input.renewalIntervalUnit,
-    input.renewalIntervalCount,
-    'renewalInterval',
     errors,
   )
 
@@ -149,10 +140,6 @@ export function validateSubscriptionInput(
 
   if (input.subscriptionDate && !isValidCivilDate(input.subscriptionDate)) {
     errors.subscriptionDate = 'La date de souscription est invalide (YYYY-MM-DD).'
-  }
-
-  if (input.renewalPeriodStartDate && !isValidCivilDate(input.renewalPeriodStartDate)) {
-    errors.renewalPeriodStartDate = 'La date de début de période de renouvellement est invalide (YYYY-MM-DD).'
   }
 
   if (input.commitmentStartDate && !isValidCivilDate(input.commitmentStartDate)) {
@@ -185,7 +172,7 @@ export function validateSubscriptionInput(
 
   // Règle de gate : nextChargeDate ne peut pas être après nextRenewalDate
   if (
-    hasDistinctContractualRenewal(input) &&
+    hasEngagement(input) &&
     input.nextChargeDate &&
     input.nextRenewalDate &&
     input.nextChargeDate > input.nextRenewalDate

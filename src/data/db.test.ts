@@ -23,7 +23,7 @@ describe('SubscriptionDatabase', () => {
       cloudUrl: 'https://invalid.dexie.cloud',
     })
 
-    expect(testDb.verno).toBe(9)
+    expect(testDb.verno).toBe(10)
     expect(testDb.tables.map(table => table.name)).toEqual(
       expect.arrayContaining([
         'subscriptions',
@@ -84,9 +84,9 @@ describe('SubscriptionDatabase', () => {
     expect(migrated?.status).toBe('UNKNOWN')
     expect(migrated?.billingIntervalUnit).toBe('MONTH')
     expect(migrated?.billingIntervalCount).toBe(1)
-    expect(migrated?.renewalIntervalUnit).toBe('MONTH')
-    expect(migrated?.renewalIntervalCount).toBe(1)
-    expect(migrated?.schemaVersion).toBe(9)
+    expect(migrated?.commitmentIntervalUnit).toBe('MONTH')
+    expect(migrated?.commitmentIntervalCount).toBe(1)
+    expect(migrated?.schemaVersion).toBe(10)
 
     upgradedDb.close()
   })
@@ -142,7 +142,7 @@ describe('SubscriptionDatabase', () => {
 
     const migratedSub = await upgradedDb.subscriptions.get('sbs-v4-test-1')
     expect(migratedSub?.currentPrice).toBe(15)
-    expect(migratedSub?.schemaVersion).toBe(9)
+    expect(migratedSub?.schemaVersion).toBe(10)
 
     const migratedPayment = await upgradedDb.payments.get('pym-v4-test-1')
     expect(migratedPayment?.amount.amount).toBe(15)
@@ -206,7 +206,7 @@ describe('SubscriptionDatabase', () => {
     expect(migratedSub?.currentPrice).toBe(15.00)
     expect((migratedSub as unknown as Record<string, unknown>).currentPriceMinor).toBeUndefined()
     expect((migratedSub as unknown as Record<string, unknown>).billingInterval).toBeUndefined()
-    expect(migratedSub?.schemaVersion).toBe(9)
+    expect(migratedSub?.schemaVersion).toBe(10)
 
     const migratedPayment = await upgradedDb.payments.get('pym-v5-test-1')
     expect(migratedPayment?.amount.amount).toBe(15.00)
@@ -280,19 +280,16 @@ describe('SubscriptionDatabase', () => {
       renewalMode: 'ROLLING',
       billingIntervalUnit: 'MONTH',
       billingIntervalCount: 1,
-      schemaVersion: 9,
+      schemaVersion: 10,
     })
     expect(deterministic?.renewalIntervalUnit).toBeUndefined()
     expect(deterministic?.nextRenewalDate).toBeUndefined()
     expect((await upgradedDb.subscriptions.get('sbs-annual'))?.renewalMode).toBe('AUTOMATIC')
-    expect((await upgradedDb.subscriptions.get('sbs-ambiguous'))?.renewalMode).toBe('AUTOMATIC')
-    expect((await upgradedDb.diagnosticLogs.toArray()).map(log => log.message)).toContain(
-      JSON.stringify({
-        event: 'rolling-migration-review',
-        subscriptionId: 'sbs-ambiguous',
-        reason: 'ambiguous-legacy-continuation',
-      }),
-    )
+    expect((await upgradedDb.subscriptions.get('sbs-annual'))?.commitmentIntervalUnit).toBe('YEAR')
+    expect((await upgradedDb.subscriptions.get('sbs-ambiguous'))?.renewalMode).toBe('ROLLING')
+    const logs = (await upgradedDb.diagnosticLogs.toArray()).map(log => log.message)
+    expect(logs.some(msg => msg.includes('ambiguous-non-annual-to-rolling'))).toBe(true)
+    expect(logs.some(msg => msg.includes('sbs-ambiguous'))).toBe(true)
     expect(await upgradedDb.payments.get('pym-real')).toMatchObject({
       status: 'CONFIRMED_PAID',
       source: 'IMPORTED',

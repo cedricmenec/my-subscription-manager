@@ -20,8 +20,8 @@ afterEach(async () => {
 })
 
 describe('subscriptions service', () => {
-  it('crée, met à jour et archive logiquement un abonnement', async () => {
-    const dbName = `crud-db-${crypto.randomUUID()}`
+  it('cree, met a jour et archive logiquement un abonnement', async () => {
+    const dbName = 'crud-db-' + crypto.randomUUID()
     createdDbNames.push(dbName)
 
     const testDb = new SubscriptionDatabase({ name: dbName, skipCloud: true })
@@ -41,7 +41,7 @@ describe('subscriptions service', () => {
     await updateSubscription(created.id, {
       name: 'Notion Plus',
       status: 'PAUSED',
-      renewalMode: 'MANUAL',
+      renewalMode: 'ROLLING',
       pauseUntil: '2026-09-15',
     }, testDb)
 
@@ -56,7 +56,7 @@ describe('subscriptions service', () => {
     testDb.close()
   })
 
-  it('calcule les champs manquants de complétude', () => {
+  it('calcule les champs manquants de completude', () => {
     const completion = computeSubscriptionCompletion({
       id: 'a',
       name: 'Service',
@@ -64,7 +64,7 @@ describe('subscriptions service', () => {
       renewalMode: 'AUTOMATIC',
       createdAt: new Date(),
       updatedAt: new Date(),
-      schemaVersion: 5,
+      schemaVersion: 10,
     })
 
     expect(completion.isComplete).toBe(false)
@@ -73,19 +73,18 @@ describe('subscriptions service', () => {
     )
   })
 
-  it('nettoie les champs contractuels avec put lors du passage à ROLLING', async () => {
-    const dbName = `rolling-save-db-${crypto.randomUUID()}`
+  it('nettoie nextRenewalDate lors du passage a ROLLING avec put', async () => {
+    const dbName = 'rolling-save-db-' + crypto.randomUUID()
     createdDbNames.push(dbName)
     const testDb = new SubscriptionDatabase({ name: dbName, skipCloud: true })
     await testDb.open()
 
     const created = await createSubscription({
-      name: 'Service continu', status: 'ACTIVE', renewalMode: 'AUTOMATIC',
+      name: 'Service', status: 'ACTIVE', renewalMode: 'AUTOMATIC',
       currentPrice: 10, currency: 'EUR', billingIntervalUnit: 'MONTH', billingIntervalCount: 1,
-      renewalIntervalUnit: 'YEAR', renewalIntervalCount: 1,
-      nextChargeDate: '2026-08-15', subscriptionDate: '2025-01-15',
-      renewalPeriodStartDate: '2026-01-15', nextRenewalDate: '2027-01-15',
       commitmentIntervalUnit: 'YEAR', commitmentIntervalCount: 1,
+      commitmentStartDate: '2026-01-15',
+      nextChargeDate: '2026-08-15', subscriptionDate: '2025-01-15',
     }, testDb)
 
     const updated = await updateSubscription(created.id, {
@@ -93,15 +92,12 @@ describe('subscriptions service', () => {
       currentPrice: created.currentPrice, currency: created.currency,
       billingIntervalUnit: created.billingIntervalUnit,
       billingIntervalCount: created.billingIntervalCount,
-      commitmentIntervalUnit: created.commitmentIntervalUnit,
-      commitmentIntervalCount: created.commitmentIntervalCount,
       nextChargeDate: created.nextChargeDate,
     }, testDb)
 
     expect(updated).toMatchObject({
-      renewalMode: 'ROLLING', billingIntervalUnit: 'MONTH', commitmentIntervalUnit: 'YEAR',
+      renewalMode: 'ROLLING', billingIntervalUnit: 'MONTH',
     })
-    expect(updated.renewalIntervalUnit).toBeUndefined()
     expect(updated.nextRenewalDate).toBeUndefined()
     expect(await testDb.subscriptions.get(created.id)).toEqual(updated)
     testDb.close()

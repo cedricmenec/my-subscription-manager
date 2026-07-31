@@ -513,12 +513,12 @@ function createDefaultRegistry(): CalculationDefinition[] {
               if (sub.status === 'ENDED') {
                 logSkip('status-ended', sub)
               } else if (sub.renewalMode === 'ROLLING') {
-                logSkip('no-distinct-renewal', sub)
+                logSkip('no-engagement', sub)
               } else if (sub.renewalMode !== 'AUTOMATIC') {
                 logSkip('mode-not-automatic', sub)
-              } else if (!sub.renewalPeriodStartDate && !sub.subscriptionDate) {
+              } else if (!sub.commitmentStartDate && !sub.subscriptionDate) {
                 logSkip('missing-anchor', sub)
-              } else if (!sub.renewalIntervalUnit) {
+              } else if (!sub.commitmentIntervalUnit) {
                 logSkip('missing-renewal-cycle', sub)
               } else {
                 logSkip('unknown', sub)
@@ -582,9 +582,9 @@ function createDefaultRegistry(): CalculationDefinition[] {
  * Calcule nextRenewalDate pour un abonnement selon les règles métier.
  * - ENDED → undefined
  * - CANCELLED_PENDING_END avec serviceEndDate dépassée → undefined
- * - renewalMode ≠ AUTOMATIC → undefined
- * - Ancre: renewalPeriodStartDate > subscriptionDate > undefined
- * - Boucle while pour ajouter renewalInterval jusqu'à dépasser today
+ * - renewalMode ≠ AUTOMATIC ou pas d'engagement → undefined
+ * - Ancre: commitmentStartDate > subscriptionDate > undefined
+ * - Boucle while pour ajouter commitmentInterval jusqu'à dépasser today
  */
 export function computeNextRenewalDateForSub(
   sub: Subscription,
@@ -603,26 +603,21 @@ export function computeNextRenewalDateForSub(
     return undefined
   }
 
-  // Pas de renouvellement automatique → pas de calcul
-  if (sub.renewalMode !== 'AUTOMATIC') {
+  // Pas d'engagement → pas de calcul
+  if (sub.renewalMode !== 'AUTOMATIC' || !sub.commitmentIntervalUnit) {
     return undefined
   }
 
-  // Déterminer l'ancre: renewalPeriodStartDate prioritaire, subscriptionDate en fallback
-  const anchor = sub.renewalPeriodStartDate ?? sub.subscriptionDate
+  // Déterminer l'ancre: commitmentStartDate prioritaire, subscriptionDate en fallback
+  const anchor = sub.commitmentStartDate ?? sub.subscriptionDate
   if (!anchor) {
-    return undefined
-  }
-
-  // Le cycle de renouvellement doit être défini — pas de fallback vers billingInterval
-  if (!sub.renewalIntervalUnit) {
     return undefined
   }
 
   return findFirstOccurrenceOnOrAfter(
     anchor,
-    sub.renewalIntervalUnit,
-    sub.renewalIntervalCount ?? 1,
+    sub.commitmentIntervalUnit,
+    sub.commitmentIntervalCount ?? 1,
     today,
   ).date
 }
@@ -635,7 +630,7 @@ export function computeDefaultAlertForSub(sub: Subscription): {
   notify: boolean | undefined
   notifyDays: number | undefined
 } {
-  if (sub.renewalMode === 'ROLLING' || sub.renewalMode === 'UNKNOWN') {
+  if (sub.renewalMode !== 'AUTOMATIC' || !sub.commitmentIntervalUnit) {
     return { notify: undefined, notifyDays: undefined }
   }
 
@@ -647,23 +642,13 @@ export function computeDefaultAlertForSub(sub: Subscription): {
     }
   }
 
-  // Mode MANUAL → always / 7j
-  if (sub.renewalMode === 'MANUAL') {
-    return { notify: true, notifyDays: 7 }
-  }
-
-  // Si pas de cycle défini → fallback
-  if (!sub.renewalIntervalUnit || !sub.renewalIntervalCount) {
-    return { notify: true, notifyDays: 7 }
-  }
-
-  const unit = sub.renewalIntervalUnit
-  const count = sub.renewalIntervalCount
+  const unit = sub.commitmentIntervalUnit
+  const count = sub.commitmentIntervalCount
 
   // Mensuel (ou hebdo court) → opt-in / 7j
   if (
-    (unit === 'MONTH' && count <= 1) ||
-    (unit === 'WEEK' && count <= 4)
+    (unit === 'MONTH' && (!count || count <= 1)) ||
+    (unit === 'WEEK' && count && count <= 4)
   ) {
     return { notify: true, notifyDays: 7 }
   }
@@ -671,7 +656,7 @@ export function computeDefaultAlertForSub(sub: Subscription): {
   // Annuel (ou long) → opt-out / 30j
   if (
     unit === 'YEAR' ||
-    (unit === 'MONTH' && count >= 6)
+    (unit === 'MONTH' && count && count >= 6)
   ) {
     return { notify: false, notifyDays: 30 }
   }

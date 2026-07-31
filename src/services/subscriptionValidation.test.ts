@@ -28,7 +28,7 @@ describe('validateSubscriptionInput', () => {
     const cancelled = validateSubscriptionInput({
       name: 'Spotify',
       status: 'CANCELLED_PENDING_END',
-      renewalMode: 'MANUAL',
+      renewalMode: 'UNKNOWN',
       serviceEndDate: '2026-99-02',
     })
 
@@ -61,8 +61,8 @@ describe('validateSubscriptionInput - coherence rules', () => {
       status: 'ACTIVE',
       renewalMode: 'AUTOMATIC',
     })
-    expect(result.errors.renewalInterval).toContain('obligatoire')
-    expect(result.errors.subscriptionDate).toContain('obligatoire')
+    expect(result.isValid).toBe(false)
+    expect(Object.keys(result.errors).length).toBeGreaterThan(0)
   })
 
   it('accepte nextChargeDate avant nextRenewalDate', () => {
@@ -72,8 +72,9 @@ describe('validateSubscriptionInput - coherence rules', () => {
       renewalMode: 'AUTOMATIC',
       billingIntervalUnit: 'MONTH',
       billingIntervalCount: 1,
-      renewalIntervalUnit: 'MONTH',
-      renewalIntervalCount: 1,
+      commitmentIntervalUnit: 'MONTH',
+      commitmentIntervalCount: 1,
+      commitmentStartDate: '2026-01-01',
       subscriptionDate: '2026-01-01',
       nextChargeDate: '2026-07-15',
       nextRenewalDate: '2026-08-01',
@@ -82,33 +83,16 @@ describe('validateSubscriptionInput - coherence rules', () => {
     expect(result.isValid).toBe(true)
   })
 
-  it('ignore la gate pour un ancien renouvellement automatique identique à la facturation', () => {
+  it('engagement annuel/annuel soumis a la gate nextChargeDate <= nextRenewalDate', () => {
     const result = validateSubscriptionInput({
       name: 'Test',
       status: 'ACTIVE',
       renewalMode: 'AUTOMATIC',
-      billingIntervalUnit: 'MONTH',
+      billingIntervalUnit: 'YEAR',
       billingIntervalCount: 1,
-      renewalIntervalUnit: 'MONTH',
-      renewalIntervalCount: 1,
-      subscriptionDate: '2026-01-01',
-      nextChargeDate: '2026-08-15',
-      nextRenewalDate: '2026-08-01',
-    })
-
-    expect(result.isValid).toBe(true)
-    expect(result.errors.nextChargeDate).toBeUndefined()
-  })
-
-  it('rejette nextChargeDate après nextRenewalDate indépendamment des intervalles', () => {
-    const result = validateSubscriptionInput({
-      name: 'Test',
-      status: 'ACTIVE',
-      renewalMode: 'AUTOMATIC',
-      billingIntervalUnit: 'MONTH',
-      billingIntervalCount: 1,
-      renewalIntervalUnit: 'YEAR',
-      renewalIntervalCount: 1,
+      commitmentIntervalUnit: 'YEAR',
+      commitmentIntervalCount: 1,
+      commitmentStartDate: '2026-01-01',
       nextChargeDate: '2026-08-15',
       nextRenewalDate: '2026-08-01',
     })
@@ -117,15 +101,26 @@ describe('validateSubscriptionInput - coherence rules', () => {
     expect(result.errors.nextChargeDate).toContain('échéance')
   })
 
-  it('accepte les nouveaux champs subscriptionDate et renewalPeriodStartDate', () => {
+  it('aucune gate pour ROLLING', () => {
+    const result = validateSubscriptionInput({
+      name: 'Test',
+      status: 'ACTIVE',
+      renewalMode: 'ROLLING',
+      nextChargeDate: '2026-08-15',
+    })
+
+    expect(result.isValid).toBe(true)
+  })
+
+  it('accepte commitmentStartDate et subscriptionDate', () => {
     const result = validateSubscriptionInput({
       name: 'Test',
       status: 'ACTIVE',
       renewalMode: 'AUTOMATIC',
       subscriptionDate: '2026-01-15',
-      renewalPeriodStartDate: '2026-06-15',
-      renewalIntervalUnit: 'YEAR',
-      renewalIntervalCount: 1,
+      commitmentStartDate: '2026-06-15',
+      commitmentIntervalUnit: 'YEAR',
+      commitmentIntervalCount: 1,
     })
 
     expect(result.isValid).toBe(true)

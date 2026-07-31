@@ -14,7 +14,7 @@ import {
   todayCivilDate,
 } from './civilDate'
 import { isValidCivilDate } from './subscriptionValidation'
-import { hasDistinctContractualRenewal } from './renewal'
+import { hasEngagement } from './renewal'
 
 export interface ProjectedPaymentDraft {
   subscriptionId: string
@@ -119,6 +119,44 @@ export function computeEquivalentAnnualCost(subscription: Subscription): number 
   return typeof monthlyCost === 'number' ? monthlyCost * 12 : undefined
 }
 
+export interface EngagementExposure {
+  amount: number
+  currency: string
+  cycleCount: number
+}
+
+export function computeEngagementExposure(
+  subscription: Subscription,
+): EngagementExposure | undefined {
+  const { commitmentIntervalUnit, commitmentIntervalCount } = subscription
+  if (!commitmentIntervalUnit || !commitmentIntervalCount) {
+    return undefined
+  }
+
+  const price = subscription.currentPrice
+  const currency = subscription.currency
+  if (typeof price !== 'number' || !currency) {
+    return undefined
+  }
+
+  const billingInterval = resolveBillingInterval(subscription)
+  if (!billingInterval) {
+    return undefined
+  }
+
+  const commitmentMonths = intervalToMonths(commitmentIntervalUnit, commitmentIntervalCount)
+  const billingMonths = intervalToMonths(billingInterval.unit, billingInterval.count)
+
+  if (!commitmentMonths || !billingMonths || billingMonths <= 0) {
+    return undefined
+  }
+
+  const cycleCount = Math.max(1, Math.round(commitmentMonths / billingMonths))
+  const amount = Math.round(price * cycleCount * 100) / 100
+
+  return { amount, currency, cycleCount }
+}
+
 export function projectSubscriptionPayments(
   subscription: Subscription,
   windowStart: string,
@@ -156,7 +194,7 @@ export function projectSubscriptionPayments(
 
   let windowEnd = requestedWindowEnd ?? addIntervalToCivilDate(windowStart, 'MONTH', 12)
   if (
-    hasDistinctContractualRenewal(subscription) &&
+    hasEngagement(subscription) &&
     subscription.nextRenewalDate &&
     isValidCivilDate(subscription.nextRenewalDate) &&
     compareCivilDates(subscription.nextRenewalDate, windowEnd) < 0

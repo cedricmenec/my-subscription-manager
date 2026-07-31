@@ -70,12 +70,9 @@ export interface UpsertSubscriptionInput extends SubscriptionFormInput {
   billingIntervalCount?: number
   commitmentIntervalUnit?: IntervalUnit
   commitmentIntervalCount?: number
-  renewalIntervalUnit?: IntervalUnit
-  renewalIntervalCount?: number
   startDate?: string
   nextRenewalDate?: string
   subscriptionDate?: string
-  renewalPeriodStartDate?: string
   commitmentStartDate?: string
   pauseStartDate?: string
   cancellationInstructions?: string
@@ -100,14 +97,14 @@ function normalizePositiveInteger(value?: number): number | undefined {
 }
 
 export function computeNextRenewalDate(
-  subscriptionDate?: string,
-  renewalIntervalUnit?: IntervalUnit,
-  renewalIntervalCount?: number,
-  renewalPeriodStartDate?: string,
+  subscriptionDateOrAnchor?: string,
+  commitmentIntervalUnit?: IntervalUnit,
+  commitmentIntervalCount?: number,
+  commitmentStartDate?: string,
   todayReference: Date = new Date(),
 ): string | undefined {
-  const anchor = renewalPeriodStartDate ?? subscriptionDate
-  if (!anchor || !renewalIntervalUnit || !renewalIntervalCount) {
+  const anchor = commitmentStartDate ?? subscriptionDateOrAnchor
+  if (!anchor || !commitmentIntervalUnit || !commitmentIntervalCount) {
     return undefined
   }
 
@@ -115,7 +112,7 @@ export function computeNextRenewalDate(
   let nextDate = anchor
 
   while (compareCivilDates(nextDate, today) < 0) {
-    nextDate = addIntervalToCivilDate(nextDate, renewalIntervalUnit, renewalIntervalCount)
+    nextDate = addIntervalToCivilDate(nextDate, commitmentIntervalUnit, commitmentIntervalCount)
   }
 
   return nextDate
@@ -200,12 +197,9 @@ export async function createSubscription(
     billingIntervalCount: input.billingIntervalCount,
     commitmentIntervalUnit: input.commitmentIntervalUnit,
     commitmentIntervalCount: input.commitmentIntervalCount,
-    renewalIntervalUnit: input.renewalIntervalUnit,
-    renewalIntervalCount: input.renewalIntervalCount,
     nextChargeDate: input.nextChargeDate,
     nextRenewalDate: input.nextRenewalDate,
     subscriptionDate: input.subscriptionDate,
-    renewalPeriodStartDate: input.renewalPeriodStartDate,
     commitmentStartDate: input.commitmentStartDate,
     pauseStartDate: input.pauseStartDate,
     pauseUntil: input.pauseUntil,
@@ -225,9 +219,9 @@ export async function createSubscription(
       ? input.nextRenewalDate ??
         computeNextRenewalDate(
           input.subscriptionDate,
-          input.renewalIntervalUnit,
-          input.renewalIntervalCount,
-          input.renewalPeriodStartDate,
+          input.commitmentIntervalUnit,
+          input.commitmentIntervalCount,
+          input.commitmentStartDate,
         )
       : undefined
 
@@ -245,13 +239,10 @@ export async function createSubscription(
     billingIntervalCount: normalizePositiveInteger(input.billingIntervalCount),
     commitmentIntervalUnit: input.commitmentIntervalUnit,
     commitmentIntervalCount: normalizePositiveInteger(input.commitmentIntervalCount),
-    renewalIntervalUnit: input.renewalIntervalUnit,
-    renewalIntervalCount: normalizePositiveInteger(input.renewalIntervalCount),
     startDate: cleanOptional(input.startDate),
     nextChargeDate: cleanOptional(input.nextChargeDate),
     nextRenewalDate: autoRenewalDate ?? cleanOptional(input.nextRenewalDate),
     subscriptionDate: cleanOptional(input.subscriptionDate),
-    renewalPeriodStartDate: cleanOptional(input.renewalPeriodStartDate) ?? cleanOptional(input.subscriptionDate),
     commitmentStartDate: cleanOptional(input.commitmentStartDate),
     pauseUntil: cleanOptional(input.pauseUntil),
     pauseStartDate: cleanOptional(input.pauseStartDate),
@@ -294,9 +285,9 @@ export async function updateSubscription(
     patch.renewalMode === 'AUTOMATIC'
       ? computeNextRenewalDate(
           cleanOptional(patch.subscriptionDate) ?? current.subscriptionDate,
-          patch.renewalIntervalUnit ?? current.renewalIntervalUnit,
-          normalizePositiveInteger(patch.renewalIntervalCount) ?? current.renewalIntervalCount,
-          cleanOptional(patch.renewalPeriodStartDate) ?? current.renewalPeriodStartDate,
+          patch.commitmentIntervalUnit ?? current.commitmentIntervalUnit,
+          normalizePositiveInteger(patch.commitmentIntervalCount) ?? current.commitmentIntervalCount,
+          cleanOptional(patch.commitmentStartDate) ?? current.commitmentStartDate,
         )
       : cleanOptional(patch.nextRenewalDate)
   const nextChargeDate = cleanOptional(patch.nextChargeDate)
@@ -318,14 +309,10 @@ export async function updateSubscription(
     commitmentIntervalUnit: patch.commitmentIntervalUnit ?? current.commitmentIntervalUnit,
     commitmentIntervalCount:
       normalizePositiveInteger(patch.commitmentIntervalCount) ?? current.commitmentIntervalCount,
-    renewalIntervalUnit: patch.renewalIntervalUnit ?? current.renewalIntervalUnit,
-    renewalIntervalCount:
-      normalizePositiveInteger(patch.renewalIntervalCount) ?? current.renewalIntervalCount,
     startDate: cleanOptional(patch.startDate),
     nextChargeDate,
     // subscriptionDate rendue modifiable : accepter la valeur du formulaire
     subscriptionDate: cleanOptional(patch.subscriptionDate) ?? current.subscriptionDate,
-    renewalPeriodStartDate: cleanOptional(patch.renewalPeriodStartDate),
     nextRenewalDate,
     commitmentStartDate: cleanOptional(patch.commitmentStartDate),
     pauseUntil: cleanOptional(patch.pauseUntil),
@@ -336,7 +323,7 @@ export async function updateSubscription(
     cancellationInstructions: cleanOptional(patch.cancellationInstructions),
     notes: cleanOptional(patch.notes),
     updatedAt: new Date(),
-    schemaVersion: 9,
+    schemaVersion: 10,
   })
 
   const validation = validateSubscriptionInput({
@@ -348,12 +335,9 @@ export async function updateSubscription(
     billingIntervalCount: merged.billingIntervalCount,
     commitmentIntervalUnit: merged.commitmentIntervalUnit,
     commitmentIntervalCount: merged.commitmentIntervalCount,
-    renewalIntervalUnit: merged.renewalIntervalUnit,
-    renewalIntervalCount: merged.renewalIntervalCount,
     nextChargeDate: merged.nextChargeDate,
     nextRenewalDate: merged.nextRenewalDate,
     subscriptionDate: merged.subscriptionDate,
-    renewalPeriodStartDate: merged.renewalPeriodStartDate,
     commitmentStartDate: merged.commitmentStartDate,
     pauseStartDate: merged.pauseStartDate,
     pauseUntil: merged.pauseUntil,

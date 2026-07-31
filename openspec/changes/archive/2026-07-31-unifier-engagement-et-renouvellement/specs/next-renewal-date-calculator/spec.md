@@ -1,8 +1,5 @@
-# next-renewal-date-calculator Specification
+## MODIFIED Requirements
 
-## Purpose
-Calculateur idempotent du moteur de calcul pour la détermination automatique de la date de prochain renouvellement (`nextRenewalDate`) et la production des indicateurs d'alerte associés, pour les abonnements en renouvellement automatique.
-## Requirements
 ### Requirement: Calcul idempotent de nextRenewalDate
 
 Le calculateur `next-renewal-date` SHALL calculer `nextRenewalDate` uniquement lorsque `hasEngagement` est vrai (c'est-à-dire lorsque `commitmentIntervalUnit` et `commitmentIntervalCount` sont définis) et `renewalMode=AUTOMATIC`, en ajoutant cycliquement `commitmentInterval` depuis l'ancre pertinente (`commitmentStartDate`, ou `subscriptionDate` en repli), et SHALL n'écrire que si l'état calculé diffère. Pour `ROLLING` ou tout abonnement sans engagement, il SHALL nettoyer toute date contractuelle résiduelle sans tenter de calcul.
@@ -49,34 +46,6 @@ Le calculateur `next-renewal-date` SHALL calculer `nextRenewalDate` uniquement l
 - **AND** la date courante est 2026-07-29
 - **THEN** `nextRenewalDate` est calculé à 2027-03-01, exactement comme pour un engagement à intervalle différent de la facturation
 
-### Requirement: Règles d'arrêt selon le statut
-
-Le calculateur SHALL mettre `nextRenewalDate` à `undefined` pour les abonnements dont le statut ne permet plus de renouvellement futur.
-
-#### Scenario: Statut ENDED → nextRenewalDate = undefined
-
-- **WHEN** l'abonnement a `status=ENDED`
-- **THEN** `nextRenewalDate` est mis à `undefined`
-- **AND** le champ écrit même si une valeur existait (nettoyage)
-
-#### Scenario: CANCELLED_PENDING_END avec serviceEndDate dépassée → undefined
-
-- **WHEN** l'abonnement a `status=CANCELLED_PENDING_END` et `serviceEndDate=2026-07-15`
-- **AND** la date courante est 2026-07-29 (serviceEndDate dépassée)
-- **THEN** `nextRenewalDate` est mis à `undefined`
-
-#### Scenario: CANCELLED_PENDING_END avec serviceEndDate future → conservé
-
-- **WHEN** l'abonnement a `status=CANCELLED_PENDING_END` et `serviceEndDate=2026-12-31`
-- **AND** la date courante est 2026-07-29
-- **THEN** le calcul normal de `nextRenewalDate` est effectué (le service est encore en cours)
-
-#### Scenario: Abonnement archivé ignoré
-
-- **WHEN** l'abonnement a `archivedAt` renseigné
-- **THEN** le calculateur ne traite pas cet abonnement
-- **AND** `nextRenewalDate` n'est pas modifié
-
 ### Requirement: Production des indicateurs d'alerte de renouvellement
 
 Le calculateur SHALL déterminer les valeurs par défaut de `notifyBeforeRenewal` et `notifyBeforeRenewalDays` uniquement lorsque `hasEngagement` est vrai, sans écraser les choix utilisateur. Il SHALL nettoyer ces champs en l'absence d'engagement.
@@ -112,40 +81,3 @@ Le calculateur `next-renewal-date` SHALL écrire un diagnostic `next-renewal-dat
 - **AND** `nextRenewalDate` n'est pas modifié
 
 \n
-
-### Requirement: Déclencheurs du calculateur
-
-Le calculateur `next-renewal-date` SHALL être exécuté au démarrage de l'application, après chaque mutation d'un abonnement, et lors du stale-check périodique (quotidien), conformément au mécanisme de déclenchement du moteur.
-
-#### Scenario: Exécution au startup
-
-- **WHEN** l'application démarre et que le moteur exécute un run complet
-- **THEN** le calculateur `next-renewal-date` est inclus dans la liste des calculateurs exécutés
-- **AND** tous les abonnements sont traités
-
-#### Scenario: Exécution après mutation d'abonnement
-
-- **WHEN** un abonnement est créé ou modifié (localement ou par synchronisation)
-- **THEN** le calculateur `next-renewal-date` est exécuté lors du run mutation déclenché
-
-#### Scenario: Exécution périodique (stale-check)
-
-- **WHEN** le stale-check périodique s'exécute
-- **THEN** le calculateur `next-renewal-date` est inclus
-- **AND** tout abonnement dont `nextRenewalDate` est devenue obsolète (car la date est passée) est mis à jour
-
-### Requirement: Convention inclusive et calcul ancré du renouvellement
-
-Le calculateur `next-renewal-date` SHALL utiliser la convention RF-01 supérieure ou égale à la date de référence et SHALL calculer les occurrences mensuelles ou annuelles depuis l’ancre initiale afin de préserver la politique calendaire.
-
-#### Scenario: Renouvellement le jour de référence
-
-- **WHEN** une occurrence de renouvellement tombe le jour de référence
-- **THEN** cette date est retournée comme prochain renouvellement
-
-#### Scenario: Renouvellement au jour 30 après février
-
-- **WHEN** l’ancre est `2026-01-30`, le cycle est mensuel et la référence est `2026-03-01`
-- **THEN** le prochain renouvellement est `2026-03-30`
-- **AND** le passage par `2026-02-28` ne transforme pas la série en fin de mois
-

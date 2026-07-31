@@ -1,21 +1,4 @@
-## Purpose
-
-Définir les garanties d'import et export des données aux formats JSON (snapshot) et CSV (abonnements et paiements) pour l'application Abos.
-## Requirements
-### Requirement: Snapshot JSON — export complet
-
-Le système SHALL permettre d'exporter toutes les données dans un snapshot JSON versionné et SHALL sérialiser `renewalMode=ROLLING` sans perte avec les autres modes supportés.
-
-#### Scenario: Export snapshot réussi
-
-- **WHEN** l'utilisateur exporte un snapshot contenant un abonnement `ROLLING`
-- **THEN** le fichier contient `format: "abos-snapshot"`, sa version et toutes les tables synchronisées
-- **AND** la valeur `ROLLING` est conservée pour cet abonnement
-
-#### Scenario: Export snapshot sans données
-
-- **WHEN** l'utilisateur exporte un snapshot alors que la base est vide
-- **THEN** le fichier contient des tableaux vides valides et restaurables
+## MODIFIED Requirements
 
 ### Requirement: Snapshot JSON — restauration complète
 
@@ -94,23 +77,6 @@ Le système SHALL importer les abonnements en mode additif, SHALL accepter `ROLL
 - **THEN** un nouvel abonnement est créé avec un ID `sbs-`
 - **AND** ses champs contractuels incompatibles sont absents
 
-### Requirement: Export CSV abonnements
-
-Le système SHALL exporter les abonnements non supprimés en CSV et SHALL inclure la valeur exacte du mode de continuation, dont `ROLLING`.
-
-#### Scenario: Export CSV abonnements
-
-- **WHEN** l'utilisateur exporte des abonnements comprenant une reconduction continue
-- **THEN** le CSV contient `ROLLING` dans la colonne documentée de ce mode
-
-### Requirement: Export CSV paiements
-
-Le système SHALL permettre d'exporter les paiements au format CSV, téléchargeable par le navigateur, conformément à FUN-PORT-002.
-
-#### Scenario: Export CSV paiements
-- **WHEN** l'utilisateur clique sur "Exporter les paiements (CSV)"
-- **THEN** le navigateur télécharge un fichier `.csv` avec l'en-tête et les données de tous les paiements non supprimés
-
 ### Requirement: Documentation du schéma
 
 Le système SHALL maintenir `docs/import-schema.md` à jour pour les formats JSON et CSV, y compris les trois valeurs de mode restantes et les invariants de `ROLLING` et `AUTOMATIC`.
@@ -122,20 +88,3 @@ Le système SHALL maintenir `docs/import-schema.md` à jour pour les formats JSO
 - **AND** `ROLLING`, `AUTOMATIC` et `UNKNOWN` sont listés avec leur sens
 - **AND** le nettoyage des champs d'engagement de `ROLLING` est documenté
 - **AND** la suppression de `MANUAL` et la fusion de `renewalInterval` dans `commitmentInterval` sont documentées
-
-### Requirement: Page d'interface `/data`
-
-Le système SHALL fournir une page dédiée aux opérations d'import, export et snapshot, accessible depuis la navigation principale.
-
-#### Scenario: Accès à la page Data
-- **WHEN** l'utilisateur navigue vers la page Data
-- **THEN** il voit les sections Snapshot, Import CSV, Export CSV
-- **AND** chaque section a des boutons d'action clairs
-- **AND** un rapport s'affiche après chaque opération
-
-#### Scenario: Import hors connexion
-- **WHEN** l'appareil est hors connexion
-- **AND** l'utilisateur importe un fichier CSV
-- **THEN** l'import est effectué localement dans IndexedDB
-- **AND** les données seront synchronisées au retour du réseau
-

@@ -1,50 +1,36 @@
 import { describe, expect, it } from 'vitest'
 import {
-  hasDistinctContractualRenewal,
-  isDeterministicLegacyRolling,
+  hasEngagement,
   normalizeSubscriptionContinuation,
 } from './renewal'
 
 describe('renewal invariants', () => {
-  it('reconnaît uniquement un cas legacy déterministe non annuel', () => {
-    expect(isDeterministicLegacyRolling({
-      renewalMode: 'AUTOMATIC',
-      billingIntervalUnit: 'MONTH',
-      billingIntervalCount: 1,
-      renewalIntervalUnit: 'MONTH',
-      renewalIntervalCount: 1,
-      nextChargeDate: '2026-08-15',
-      nextRenewalDate: '2026-08-15',
+  it('hasEngagement est vrai quand commitmentIntervalUnit/Count sont definis', () => {
+    expect(hasEngagement({
+      commitmentIntervalUnit: 'MONTH',
+      commitmentIntervalCount: 1,
     })).toBe(true)
 
-    expect(isDeterministicLegacyRolling({
-      renewalMode: 'AUTOMATIC',
-      billingIntervalUnit: 'YEAR',
-      renewalIntervalUnit: 'YEAR',
-      nextChargeDate: '2026-08-15',
-      nextRenewalDate: '2026-08-15',
+    expect(hasEngagement({
+      commitmentIntervalUnit: 'YEAR',
+      commitmentIntervalCount: 1,
+    })).toBe(true)
+  })
+
+  it('hasEngagement est faux quand commitmentIntervalUnit/Count sont absents', () => {
+    expect(hasEngagement({})).toBe(false)
+    expect(hasEngagement({
+      commitmentIntervalUnit: undefined,
+      commitmentIntervalCount: undefined,
+    })).toBe(false)
+    expect(hasEngagement({
+      commitmentIntervalUnit: 'MONTH',
     })).toBe(false)
   })
 
-  it('distingue un renouvellement annuel d’une ancienne mensualisation identique', () => {
-    expect(hasDistinctContractualRenewal({
-      renewalMode: 'AUTOMATIC',
-      billingIntervalUnit: 'MONTH',
-      renewalIntervalUnit: 'YEAR',
-    })).toBe(true)
-    expect(hasDistinctContractualRenewal({
-      renewalMode: 'AUTOMATIC',
-      billingIntervalUnit: 'MONTH',
-      renewalIntervalUnit: 'MONTH',
-    })).toBe(false)
-  })
-
-  it('nettoie tous les champs contractuels incompatibles de ROLLING', () => {
+  it('nettoie nextRenewalDate et notify pour ROLLING', () => {
     const normalized = normalizeSubscriptionContinuation({
       renewalMode: 'ROLLING' as const,
-      renewalIntervalUnit: 'MONTH' as const,
-      renewalIntervalCount: 1,
-      renewalPeriodStartDate: '2026-01-01',
       nextRenewalDate: '2026-08-01',
       notifyBeforeRenewal: true,
       notifyBeforeRenewalDays: 7,
@@ -54,6 +40,28 @@ describe('renewal invariants', () => {
     expect(normalized).toEqual({
       renewalMode: 'ROLLING',
       billingIntervalUnit: 'MONTH',
+    })
+  })
+
+  it('conserve nextRenewalDate et notify pour AUTOMATIC', () => {
+    const normalized = normalizeSubscriptionContinuation({
+      renewalMode: 'AUTOMATIC' as const,
+      commitmentIntervalUnit: 'YEAR' as const,
+      commitmentIntervalCount: 1,
+      nextRenewalDate: '2027-03-01',
+      notifyBeforeRenewal: false,
+      notifyBeforeRenewalDays: 30,
+      billingIntervalUnit: 'YEAR' as const,
+    })
+
+    expect(normalized).toEqual({
+      renewalMode: 'AUTOMATIC',
+      commitmentIntervalUnit: 'YEAR',
+      commitmentIntervalCount: 1,
+      nextRenewalDate: '2027-03-01',
+      notifyBeforeRenewal: false,
+      notifyBeforeRenewalDays: 30,
+      billingIntervalUnit: 'YEAR',
     })
   })
 })

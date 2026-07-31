@@ -125,9 +125,7 @@ export default function SubscriptionCardList({
                     ? 'Reconduction continue'
                     : sub.renewalMode === 'AUTOMATIC'
                       ? 'Renouv. auto'
-                      : sub.renewalMode === 'MANUAL'
-                        ? 'Renouv. manuel'
-                        : 'Inconnu'}
+                      : 'Inconnu'}
                 </span>
               </div>
               <div className="card-badges">

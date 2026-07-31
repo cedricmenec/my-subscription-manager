@@ -9,6 +9,8 @@ import type {
 } from '../data/db'
 import { addIntervalToCivilDate, parseCivilDate, todayCivilDate } from '../services/civilDate'
 import SubscriptionDialog, { toFormState } from '../components/SubscriptionDialog'
+import { computeEngagementExposure } from '../services/finance'
+import { hasEngagement } from '../services/renewal'
 
 interface SubscriptionDetailPageProps {
   subscription?: Subscription
@@ -43,7 +45,6 @@ const STATUS_CLASSES: Record<SubscriptionStatus, string> = {
 const RENEWAL_LABELS: Record<RenewalMode, string> = {
   ROLLING: 'Reconduction continue',
   AUTOMATIC: 'Renouvellement automatique',
-  MANUAL: 'Renouvellement manuel',
   UNKNOWN: 'À qualifier',
 }
 
@@ -284,7 +285,7 @@ export default function SubscriptionDetailPage({
           )}
         </article>
 
-        {subscription.renewalMode === 'AUTOMATIC' ? (
+        {hasEngagement(subscription) ? (
           <article className="subscription-highlight-card">
             <p className="section-label">Prochain renouvellement</p>
             {subscription.nextRenewalDate ? (
@@ -298,7 +299,7 @@ export default function SubscriptionDetailPage({
             ) : (
               <>
                 <strong className="subscription-highlight-empty">Date non calculable</strong>
-                <span>Vérifiez la période et le cycle de renouvellement.</span>
+                <span>Vérifiez l'engagement et le cycle.</span>
               </>
             )}
           </article>
@@ -368,18 +369,30 @@ export default function SubscriptionDetailPage({
             <DetailField label="Mode de renouvellement">
               {RENEWAL_LABELS[subscription.renewalMode]}
             </DetailField>
-            {subscription.renewalMode !== 'ROLLING' ? (
+            {hasEngagement(subscription) ? (
               <>
-                <DetailField label="Cycle de renouvellement">
-                  {formatInterval(subscription.renewalIntervalCount, subscription.renewalIntervalUnit)}
+                <DetailField label="Cycle d'engagement">
+                  {formatInterval(subscription.commitmentIntervalCount, subscription.commitmentIntervalUnit)}
                 </DetailField>
                 <DetailField label="Date de souscription">{formatDate(subscription.subscriptionDate)}</DetailField>
-                <DetailField label="Début de période de renouvellement">
-                  {formatDate(subscription.renewalPeriodStartDate)}
-                </DetailField>
+
+                <DetailField label="Début d'engagement">{formatDate(subscription.commitmentStartDate)}</DetailField>
                 <DetailField label="Prochain renouvellement">{formatDate(subscription.nextRenewalDate)}</DetailField>
+                <DetailField label="Exposition financière">
+                  {(() => {
+                    const exposure = computeEngagementExposure(subscription)
+                    return exposure ? (
+                      <span className="exposure-badge">{formatMoney(exposure.amount, exposure.currency)} en jeu</span>
+                    ) : '—'
+                  })()}
+                </DetailField>
               </>
-            ) : null}
+            ) : (
+              <>
+                <DetailField label="Cycle d'engagement">Sans engagement</DetailField>
+                <DetailField label="Date de souscription">{formatDate(subscription.subscriptionDate)}</DetailField>
+              </>
+            )}
             <DetailField label="Début d’engagement">{formatDate(subscription.commitmentStartDate)}</DetailField>
             <DetailField label="Durée d’engagement">
               {formatInterval(subscription.commitmentIntervalCount, subscription.commitmentIntervalUnit)}

@@ -15,7 +15,7 @@ const VALID_STATUSES: SubscriptionStatus[] = [
   'TRIAL', 'ACTIVE', 'PAUSED', 'CANCELLED_PENDING_END', 'ENDED', 'UNKNOWN',
 ]
 
-const VALID_RENEWAL_MODES: RenewalMode[] = ['ROLLING', 'AUTOMATIC', 'MANUAL', 'UNKNOWN']
+const VALID_RENEWAL_MODES: RenewalMode[] = ['ROLLING', 'AUTOMATIC', 'UNKNOWN']
 
 const VALID_INTERVAL_UNITS: IntervalUnit[] = ['DAY', 'WEEK', 'MONTH', 'YEAR']
 
@@ -23,8 +23,8 @@ const CSV_SUBSCRIPTION_HEADERS = [
   'name', 'provider', 'planName', 'categoryId', 'status',
   'currentPrice', 'currency', 'billingIntervalUnit', 'billingIntervalCount',
   'commitmentIntervalUnit', 'commitmentIntervalCount',
-  'renewalMode', 'renewalIntervalUnit', 'renewalIntervalCount',
-  'subscriptionDate', 'renewalPeriodStartDate', 'nextRenewalDate',
+  'renewalMode',
+  'subscriptionDate', 'commitmentStartDate', 'nextRenewalDate',
   'notifyBeforeRenewal', 'notifyBeforeRenewalDays',
   'nextChargeDate', 'startDate', 'pauseUntil', 'serviceEndDate',
   'managementUrl', 'cancellationUrl', 'cancellationInstructions', 'notes',
@@ -146,7 +146,7 @@ export async function previewCsvImport(
     // Validate dates
     const dateFields = [
       'nextChargeDate', 'nextRenewalDate', 'subscriptionDate',
-      'renewalPeriodStartDate', 'startDate', 'pauseUntil', 'serviceEndDate',
+      'commitmentStartDate', 'startDate', 'pauseUntil', 'serviceEndDate',
     ] as const
     for (const field of dateFields) {
       if (row[field] && row[field].trim()) {
@@ -236,10 +236,8 @@ export async function confirmCsvImport(
         billingIntervalCount: row.billingIntervalCount?.trim() ? Number(row.billingIntervalCount) : undefined,
         commitmentIntervalUnit: (row.commitmentIntervalUnit?.trim() as IntervalUnit) || undefined,
         commitmentIntervalCount: row.commitmentIntervalCount?.trim() ? Number(row.commitmentIntervalCount) : undefined,
-        renewalIntervalUnit: (row.renewalIntervalUnit?.trim() as IntervalUnit) || undefined,
-        renewalIntervalCount: row.renewalIntervalCount?.trim() ? Number(row.renewalIntervalCount) : undefined,
         subscriptionDate: row.subscriptionDate?.trim() || undefined,
-        renewalPeriodStartDate: row.renewalPeriodStartDate?.trim() || undefined,
+        commitmentStartDate: row.commitmentStartDate?.trim() || undefined,
         nextRenewalDate: row.nextRenewalDate?.trim() || undefined,
         notifyBeforeRenewal: row.notifyBeforeRenewal?.trim()
           ? row.notifyBeforeRenewal.trim().toLowerCase() === 'true'
@@ -257,8 +255,8 @@ export async function confirmCsvImport(
         notes: row.notes?.trim() || undefined,
         createdAt: now,
         updatedAt: now,
-        schemaVersion: 9,
-      }, { normalizeLegacy: true })
+        schemaVersion: 10,
+      })
 
       await database.subscriptions.put(subscription)
       created++

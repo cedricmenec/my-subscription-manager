@@ -20,7 +20,7 @@ export type SubscriptionStatus =
   | 'ENDED'
   | 'UNKNOWN'
 
-export type RenewalMode = 'ROLLING' | 'AUTOMATIC' | 'MANUAL' | 'UNKNOWN'
+export type RenewalMode = 'ROLLING' | 'AUTOMATIC' | 'UNKNOWN'
 
 export type LegacyBillingInterval = 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'UNKNOWN'
 
@@ -58,14 +58,11 @@ export interface Subscription extends SyncedEntity {
   billingIntervalCount?: number
   commitmentIntervalUnit?: IntervalUnit
   commitmentIntervalCount?: number
-  renewalIntervalUnit?: IntervalUnit
-  renewalIntervalCount?: number
   renewalMode: RenewalMode
   startDate?: string
   nextChargeDate?: string
   nextRenewalDate?: string
   subscriptionDate?: string
-  renewalPeriodStartDate?: string
   notifyBeforeRenewal?: boolean
   notifyBeforeRenewalDays?: number
   commitmentStartDate?: string
@@ -574,6 +571,107 @@ export class SubscriptionDatabase extends Dexie {
                 subscriptionId,
                 reason: 'ambiguous-legacy-continuation',
               }),
+            })),
+          )
+        }
+      })
+
+    this.version(10)
+      .stores({
+        subscriptions:
+          `${syncedPrimaryKey}, status, categoryId, renewalMode, billingIntervalUnit, nextChargeDate, nextRenewalDate, updatedAt, archivedAt, deletedAt`,
+        categories: `${syncedPrimaryKey}, &name, sortOrder, updatedAt`,
+        payments:
+          `${syncedPrimaryKey}, subscriptionId, scheduledDate, paidDate, status, [subscriptionId+scheduledDate], updatedAt, deletedAt`,
+        settings: `${syncedPrimaryKey}, &key, updatedAt`,
+        localSettings: '&key, updatedAt',
+        diagnosticLogs: '++id, timestamp, category',
+        calculationState: '&key, updatedAt',
+        importPreview: '&id, rowNumber, status',
+        drafts: '&id, entityType, updatedAt',
+      })
+      .upgrade(async tx => {
+        const migrated: Array<{ subscriptionId: string; event: string; old: string; new: string }> = []
+        await tx
+          .table('subscriptions')
+          .toCollection()
+          .modify((subscription: Record<string, unknown>) => {
+            const id = String(subscription.id ?? '')
+            const oldState = JSON.stringify({
+              renewalMode: subscription.renewalMode,
+              renewalIntervalUnit: subscription.renewalIntervalUnit,
+              renewalIntervalCount: subscription.renewalIntervalCount,
+              renewalPeriodStartDate: subscription.renewalPeriodStartDate,
+              commitmentIntervalUnit: subscription.commitmentIntervalUnit,
+              commitmentIntervalCount: subscription.commitmentIntervalCount,
+              commitmentStartDate: subscription.commitmentStartDate,
+            })
+
+            // 1. Copier renewalInterval* → commitmentInterval* si commitmentInterval* absent
+            if (subscription.renewalIntervalUnit !== undefined && subscription.commitmentIntervalUnit === undefined) {
+              subscription.commitmentIntervalUnit = subscription.renewalIntervalUnit
+            }
+            if (subscription.renewalIntervalCount !== undefined && subscription.commitmentIntervalCount === undefined) {
+              subscription.commitmentIntervalCount = subscription.renewalIntervalCount
+            }
+            if (subscription.renewalPeriodStartDate !== undefined && subscription.commitmentStartDate === undefined) {
+              subscription.commitmentStartDate = subscription.renewalPeriodStartDate
+            }
+
+            // 2. Supprimer les champs de renouvellement séparés
+            delete subscription.renewalIntervalUnit
+            delete subscription.renewalIntervalCount
+            delete subscription.renewalPeriodStartDate
+
+            // 3. Traiter le mode MANUAL
+            if (subscription.renewalMode === 'MANUAL') {
+              const hasCycle = subscription.commitmentIntervalUnit !== undefined
+              const hasAnchor = subscription.commitmentStartDate !== undefined || subscription.subscriptionDate !== undefined
+              if (hasCycle && hasAnchor) {
+                subscription.renewalMode = 'AUTOMATIC'
+                migrated.push({ subscriptionId: id, event: 'manual-to-automatic', old: oldState, new: JSON.stringify({ ...subscription }) })
+              } else {
+                subscription.renewalMode = 'UNKNOWN'
+                migrated.push({ subscriptionId: id, event: 'manual-to-unknown', old: oldState, new: JSON.stringify({ ...subscription }) })
+              }
+            }
+
+            // 4. Normaliser les cas ambigus non-annuels legacy
+            //    (billingInterval == renewalInterval, unité != YEAR) → ROLLING
+            const billingUnit = subscription.billingIntervalUnit as string | undefined
+            const billingCount = subscription.billingIntervalCount as number | undefined
+            const commitUnit = subscription.commitmentIntervalUnit as string | undefined
+            const commitCount = subscription.commitmentIntervalCount as number | undefined
+            if (
+              subscription.renewalMode === 'AUTOMATIC' &&
+              billingUnit &&
+              billingUnit !== 'YEAR' &&
+              billingUnit === commitUnit &&
+              (billingCount ?? 1) === (commitCount ?? 1)
+            ) {
+              delete subscription.commitmentIntervalUnit
+              delete subscription.commitmentIntervalCount
+              delete subscription.commitmentStartDate
+              delete subscription.nextRenewalDate
+              delete subscription.notifyBeforeRenewal
+              delete subscription.notifyBeforeRenewalDays
+              subscription.renewalMode = 'ROLLING'
+              migrated.push({ subscriptionId: id, event: 'ambiguous-non-annual-to-rolling', old: oldState, new: JSON.stringify({ ...subscription }) })
+            }
+
+            // 5. Supprimer les champs legacy déjà nettoyés par v9
+            delete (subscription as Record<string, unknown>).currentPriceMinor
+            delete (subscription as Record<string, unknown>).billingInterval
+            subscription.schemaVersion = 10
+          })
+
+        // Écrire les logs de diagnostic pour les cas ambigus ou dégradés
+        if (migrated.length > 0) {
+          await tx.table('diagnosticLogs').bulkAdd(
+            migrated.map(entry => ({
+              timestamp: new Date(),
+              category: 'migration',
+              message: JSON.stringify(entry),
             })),
           )
         }

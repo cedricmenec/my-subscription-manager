@@ -4,7 +4,7 @@ import { normalizeSubscriptionContinuation } from './renewal'
 const SYNCED_ENTITY_DATE_FIELDS = ['createdAt', 'updatedAt', 'deletedAt'] as const
 const SUBSCRIPTION_DATE_FIELDS = [...SYNCED_ENTITY_DATE_FIELDS, 'archivedAt'] as const
 const PAYMENT_DATE_FIELDS = [...SYNCED_ENTITY_DATE_FIELDS, 'correctedAt'] as const
-const VALID_RENEWAL_MODES: RenewalMode[] = ['ROLLING', 'AUTOMATIC', 'MANUAL', 'UNKNOWN']
+const VALID_RENEWAL_MODES: RenewalMode[] = ['ROLLING', 'AUTOMATIC', 'UNKNOWN']
 
 export class SnapshotValidationError extends Error {
   constructor(message: string) {
@@ -133,7 +133,7 @@ export function validateSnapshot(raw: unknown): SnapshotEnvelope {
             `data.subscriptions[${index}].renewalMode contient une valeur inconnue.`,
           )
         }
-        return normalizeSubscriptionContinuation(revived, { normalizeLegacy: true })
+        return normalizeSubscriptionContinuation(revived)
       }),
       categories: snapshot.data.categories.map((category, index) =>
         reviveEntityDates(

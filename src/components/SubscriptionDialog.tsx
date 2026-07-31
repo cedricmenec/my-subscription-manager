@@ -11,7 +11,7 @@ import {
   updateSubscription,
   type UpsertSubscriptionInput,
 } from '../services/subscriptions'
-import { describeInterval, parseOptionalNumber } from '../services/finance'
+import { computeEngagementExposure, describeInterval, parseOptionalNumber } from '../services/finance'
 import { addIntervalToCivilDate } from '../services/civilDate'
 
 export interface SubscriptionFormState {
@@ -27,12 +27,9 @@ export interface SubscriptionFormState {
   billingIntervalUnit: IntervalUnit | ''
   commitmentIntervalCount: string
   commitmentIntervalUnit: IntervalUnit | ''
-  renewalIntervalCount: string
-  renewalIntervalUnit: IntervalUnit | ''
   nextChargeDate: string
   nextRenewalDate: string
   subscriptionDate: string
-  renewalPeriodStartDate: string
   commitmentStartDate: string
   pauseStartDate: string
   pauseUntil: string
@@ -59,12 +56,9 @@ export const EMPTY_FORM: SubscriptionFormState = {
   billingIntervalUnit: 'MONTH',
   commitmentIntervalCount: '',
   commitmentIntervalUnit: '',
-  renewalIntervalCount: '',
-  renewalIntervalUnit: '',
   nextChargeDate: '',
   nextRenewalDate: '',
   subscriptionDate: '',
-  renewalPeriodStartDate: '',
   commitmentStartDate: '',
   pauseStartDate: '',
   pauseUntil: '',
@@ -100,14 +94,9 @@ export function toFormState(subscription: Subscription): SubscriptionFormState {
       ? String(subscription.commitmentIntervalCount)
       : '',
     commitmentIntervalUnit: subscription.commitmentIntervalUnit ?? '',
-    renewalIntervalCount: subscription.renewalIntervalCount
-      ? String(subscription.renewalIntervalCount)
-      : '',
-    renewalIntervalUnit: subscription.renewalIntervalUnit ?? '',
     nextChargeDate: subscription.nextChargeDate ?? '',
     nextRenewalDate: subscription.nextRenewalDate ?? '',
     subscriptionDate: subscription.subscriptionDate ?? '',
-    renewalPeriodStartDate: subscription.renewalPeriodStartDate ?? '',
     commitmentStartDate: subscription.commitmentStartDate ?? '',
     pauseStartDate: subscription.pauseStartDate ?? '',
     pauseUntil: subscription.pauseUntil ?? '',
@@ -126,7 +115,7 @@ const STATUS_OPTIONS: SubscriptionStatus[] = [
   'TRIAL', 'ACTIVE', 'PAUSED', 'CANCELLED_PENDING_END', 'ENDED', 'UNKNOWN',
 ]
 
-const RENEWAL_OPTIONS: RenewalMode[] = ['ROLLING', 'AUTOMATIC', 'MANUAL', 'UNKNOWN']
+const RENEWAL_OPTIONS: RenewalMode[] = ['ROLLING', 'AUTOMATIC', 'UNKNOWN']
 const INTERVAL_UNIT_OPTIONS: IntervalUnit[] = ['WEEK', 'MONTH', 'YEAR']
 
 const STATUS_LABELS: Record<SubscriptionStatus, string> = {
@@ -141,7 +130,6 @@ const STATUS_LABELS: Record<SubscriptionStatus, string> = {
 const RENEWAL_LABELS: Record<RenewalMode, string> = {
   ROLLING: 'Reconduction continue',
   AUTOMATIC: 'Renouvellement automatique à date fixe',
-  MANUAL: 'Renouvellement manuel à date fixe',
   UNKNOWN: 'Inconnu',
 }
 
@@ -302,23 +290,11 @@ export default function SubscriptionDialog({
         commitmentIntervalUnit: localForm.hasCommitment
           ? (localForm.commitmentIntervalUnit || undefined)
           : undefined,
-        commitmentStartDate: localForm.hasCommitment
+        commitmentStartDate: localForm.renewalMode === 'AUTOMATIC'
           ? (localForm.commitmentStartDate || undefined)
           : undefined,
-        renewalIntervalCount: localForm.renewalMode === 'AUTOMATIC' || localForm.renewalMode === 'MANUAL'
-          ? parseOptionalNumber(localForm.renewalIntervalCount)
-          : undefined,
-        renewalIntervalUnit: localForm.renewalMode === 'AUTOMATIC' || localForm.renewalMode === 'MANUAL'
-          ? (localForm.renewalIntervalUnit || undefined)
-          : undefined,
-        subscriptionDate: localForm.renewalMode === 'AUTOMATIC' || localForm.renewalMode === 'MANUAL'
+        subscriptionDate: localForm.renewalMode === 'AUTOMATIC'
           ? (localForm.subscriptionDate || undefined)
-          : undefined,
-        renewalPeriodStartDate: localForm.renewalMode === 'AUTOMATIC' || localForm.renewalMode === 'MANUAL'
-          ? (localForm.renewalPeriodStartDate || undefined)
-          : undefined,
-        nextRenewalDate: localForm.renewalMode === 'MANUAL'
-          ? (localForm.nextRenewalDate || undefined)
           : undefined,
         startDate: localForm.startDate || undefined,
         nextChargeDate: localForm.nextChargeDate || undefined,
@@ -371,29 +347,17 @@ export default function SubscriptionDialog({
         currency: localForm.currency,
         billingIntervalCount: parseOptionalNumber(localForm.billingIntervalCount),
         billingIntervalUnit: localForm.billingIntervalUnit || undefined,
-        commitmentIntervalCount: localForm.hasCommitment
+        commitmentIntervalCount: localForm.renewalMode === 'AUTOMATIC'
           ? parseOptionalNumber(localForm.commitmentIntervalCount)
           : undefined,
-        commitmentIntervalUnit: localForm.hasCommitment
+        commitmentIntervalUnit: localForm.renewalMode === 'AUTOMATIC'
           ? (localForm.commitmentIntervalUnit || undefined)
           : undefined,
-        commitmentStartDate: localForm.hasCommitment
+        commitmentStartDate: localForm.renewalMode === 'AUTOMATIC'
           ? (localForm.commitmentStartDate || undefined)
           : undefined,
-        renewalIntervalCount: localForm.renewalMode === 'AUTOMATIC' || localForm.renewalMode === 'MANUAL'
-          ? parseOptionalNumber(localForm.renewalIntervalCount)
-          : undefined,
-        renewalIntervalUnit: localForm.renewalMode === 'AUTOMATIC' || localForm.renewalMode === 'MANUAL'
-          ? (localForm.renewalIntervalUnit || undefined)
-          : undefined,
-        subscriptionDate: localForm.renewalMode === 'AUTOMATIC' || localForm.renewalMode === 'MANUAL'
+        subscriptionDate: localForm.renewalMode === 'AUTOMATIC'
           ? (localForm.subscriptionDate || undefined)
-          : undefined,
-        renewalPeriodStartDate: localForm.renewalMode === 'AUTOMATIC' || localForm.renewalMode === 'MANUAL'
-          ? (localForm.renewalPeriodStartDate || undefined)
-          : undefined,
-        nextRenewalDate: localForm.renewalMode === 'MANUAL'
-          ? (localForm.nextRenewalDate || undefined)
           : undefined,
         startDate: localForm.startDate || undefined,
         nextChargeDate: localForm.nextChargeDate || undefined,
@@ -576,116 +540,76 @@ export default function SubscriptionDialog({
           </div>
         </fieldset>
 
-        {/* Section Renouvellement (conditionnelle) */}
-        {(localForm.renewalMode === 'AUTOMATIC' || localForm.renewalMode === 'MANUAL') && (
+        {/* Section Engagement (conditionnelle : uniquement pour AUTOMATIC) */}
+        {localForm.renewalMode === 'AUTOMATIC' && (
           <fieldset className="dialog-section">
-            <legend className="dialog-section-title">Renouvellement</legend>
+            <legend className="dialog-section-title">Engagement</legend>
             <div className="dialog-section-grid">
               <label>
-                Cycle de renouvellement: quantité
-                <input type="number" min="1" value={localForm.renewalIntervalCount} onChange={e => updateField('renewalIntervalCount', e.target.value)} />
-                {formErrors.renewalInterval ? <span className="field-error">{formErrors.renewalInterval}</span> : null}
+                Durée d'engagement
+                <div className="inline-group">
+                  <input type="number" min="1" value={localForm.commitmentIntervalCount} onChange={e => updateField('commitmentIntervalCount', e.target.value)} placeholder="Quantité" />
+                  <select value={localForm.commitmentIntervalUnit} onChange={e => updateField('commitmentIntervalUnit', e.target.value as IntervalUnit | '')}>
+                    <option value="">Unité</option>
+                    {INTERVAL_UNIT_OPTIONS.map(u => (
+                      <option key={u} value={u}>{INTERVAL_LABELS[u]}</option>
+                    ))}
+                  </select>
+                </div>
+                {formErrors.commitmentInterval ? <span className="field-error">{formErrors.commitmentInterval}</span> : null}
               </label>
               <label>
-                Unité
-                <select value={localForm.renewalIntervalUnit} onChange={e => updateField('renewalIntervalUnit', e.target.value as IntervalUnit | '')}>
-                  <option value="">Choisir une unité</option>
-                  {INTERVAL_UNIT_OPTIONS.map(u => (
-                    <option key={u} value={u}>{INTERVAL_LABELS[u]}</option>
-                  ))}
-                </select>
+                Début d'engagement
+                <input type="date" value={localForm.commitmentStartDate} onChange={e => updateField('commitmentStartDate', e.target.value)} />
+                <small className="field-hint">Par défaut la date de début de service (ancre pour le calcul)</small>
               </label>
               <label>
                 Date de souscription
                 <input type="date" value={localForm.subscriptionDate} onChange={e => updateField('subscriptionDate', e.target.value)} />
-                <small className="field-hint">Date de souscription initiale (ancre pour le calcul du renouvellement)</small>
+                <small className="field-hint">Ancre de secours si le début d'engagement est absent</small>
               </label>
-              <label>
-                Début de la période en cours
-                <input type="date" value={localForm.renewalPeriodStartDate} onChange={e => updateField('renewalPeriodStartDate', e.target.value)} />
-                <small className="field-hint">Ajustable (ex. mois offert)</small>
+              <label className="info-field">
+                Prochain renouvellement
+                <div className="field-info">
+                  {editingId && localForm.nextRenewalDate
+                    ? localForm.nextRenewalDate
+                    : 'Calculé automatiquement par le moteur'}
+                </div>
+                <small className="field-hint">Mise à jour automatique</small>
               </label>
-              {localForm.renewalMode === 'AUTOMATIC' ? (
-                <label className="info-field">
-                  Prochain renouvellement
-                  <div className="field-info">
-                    {editingId && localForm.nextRenewalDate
-                      ? localForm.nextRenewalDate
-                      : 'Calculé automatiquement par le moteur'}
-                  </div>
-                  <small className="field-hint">Mise à jour automatique</small>
-                </label>
-              ) : (
-                <label>
-                  Prochain renouvellement contractuel
-                  <input type="date" value={localForm.nextRenewalDate} onChange={e => updateField('nextRenewalDate', e.target.value)} />
-                  {formErrors.nextRenewalDate ? <span className="field-error">{formErrors.nextRenewalDate}</span> : null}
-                </label>
-              )}
+              <label className="info-field">
+                Exposition financière
+                <div className="field-info">
+                  {(() => {
+                    const price = parseOptionalNumber(localForm.currentPrice)
+                    const billingUnit = localForm.billingIntervalUnit || undefined
+                    const billingCount = parseOptionalNumber(localForm.billingIntervalCount)
+                    const commitUnit = localForm.commitmentIntervalUnit || undefined
+                    const commitCount = parseOptionalNumber(localForm.commitmentIntervalCount)
+                    const currency = localForm.currency
+                    if (price && billingUnit && billingCount && commitUnit && commitCount && currency) {
+                      // Build a bare subscription-like object for computeEngagementExposure
+                      const sub = {
+                        currentPrice: price,
+                        currency,
+                        billingIntervalUnit: billingUnit,
+                        billingIntervalCount: billingCount,
+                        commitmentIntervalUnit: commitUnit,
+                        commitmentIntervalCount: commitCount,
+                      } as Subscription
+                      const exposure = computeEngagementExposure(sub)
+                      if (exposure) {
+                        return `${exposure.amount} ${exposure.currency} en jeu`
+                      }
+                    }
+                    return '—'
+                  })()}
+                </div>
+                <small className="field-hint">Montant total dû sur la durée de l'engagement</small>
+              </label>
             </div>
           </fieldset>
         )}
-
-        {/* Section Engagement (conditionnelle) */}
-        <fieldset className="dialog-section">
-          <legend className="dialog-section-title">Engagement</legend>
-          <div className="dialog-section-grid">
-            <label>
-              Type d'engagement
-              <select
-                value={localForm.hasCommitment ? 'yes' : 'no'}
-                onChange={e => {
-                  const hasCommitment = e.target.value === 'yes'
-                  updateField('hasCommitment', hasCommitment)
-                  if (!hasCommitment) {
-                    updateField('commitmentIntervalCount', '')
-                    updateField('commitmentIntervalUnit', '')
-                    updateField('commitmentStartDate', '')
-                  }
-                }}
-              >
-                <option value="no">Sans engagement</option>
-                <option value="yes">Avec engagement</option>
-              </select>
-            </label>
-            {localForm.hasCommitment && (
-              <>
-                <label>
-                  Durée d'engagement
-                  <div className="inline-group">
-                    <input type="number" min="1" value={localForm.commitmentIntervalCount} onChange={e => updateField('commitmentIntervalCount', e.target.value)} placeholder="Quantité" />
-                    <select value={localForm.commitmentIntervalUnit} onChange={e => updateField('commitmentIntervalUnit', e.target.value as IntervalUnit | '')}>
-                      <option value="">Unité</option>
-                      {INTERVAL_UNIT_OPTIONS.map(u => (
-                        <option key={u} value={u}>{INTERVAL_LABELS[u]}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {formErrors.commitmentInterval ? <span className="field-error">{formErrors.commitmentInterval}</span> : null}
-                </label>
-                <label>
-                  Début d'engagement
-                  <input type="date" value={localForm.commitmentStartDate} onChange={e => updateField('commitmentStartDate', e.target.value)} />
-                  <small className="field-hint">Par défaut la date de début de service</small>
-                </label>
-                <label className="info-field">
-                  Fin d'engagement
-                  <div className="field-info">
-                    {localForm.commitmentStartDate && localForm.commitmentIntervalUnit && localForm.commitmentIntervalCount
-                      ? computeCommitmentEndDate(
-                          localForm.commitmentStartDate,
-                          localForm.commitmentIntervalUnit as IntervalUnit,
-                          localForm.commitmentIntervalCount,
-                        )
-                      : '—'}
-                  </div>
-                  <small className="field-hint">Calculée automatiquement (informative)</small>
-                </label>
-              </>
-            )}
-          </div>
-        </fieldset>
-
         {/* Section Pause (conditionnelle) */}
         {localForm.status === 'PAUSED' ? (
           <fieldset className="dialog-section">

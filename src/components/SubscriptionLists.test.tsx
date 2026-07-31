@@ -68,13 +68,12 @@ describe('accès à la fiche depuis les listes', () => {
     expect(onEdit).toHaveBeenCalledWith(subscription)
   })
 
-  it('distingue les quatre modes de continuation dans la liste compacte', () => {
+  it('distingue les modes de continuation dans la liste compacte', () => {
     render(
       <SubscriptionCompactList
         subscriptions={[
           { ...subscription, id: 'rolling', name: 'Rolling', renewalMode: 'ROLLING' },
           { ...subscription, id: 'automatic', name: 'Automatic', renewalMode: 'AUTOMATIC' },
-          { ...subscription, id: 'manual', name: 'Manual', renewalMode: 'MANUAL' },
           { ...subscription, id: 'unknown', name: 'Unknown', renewalMode: 'UNKNOWN' },
         ]}
         sortBy="nextChargeDate"
@@ -92,7 +91,6 @@ describe('accès à la fiche depuis les listes', () => {
 
     expect(screen.getByText('Reconduction continue')).toBeInTheDocument()
     expect(screen.getByText('Calcul automatique')).toBeInTheDocument()
-    expect(screen.getByText('Renouvellement manuel')).toBeInTheDocument()
     expect(screen.getByText('Inconnu')).toBeInTheDocument()
   })
 })

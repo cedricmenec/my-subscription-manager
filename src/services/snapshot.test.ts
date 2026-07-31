@@ -76,7 +76,7 @@ describe('validateSnapshot', () => {
     }
     Object.assign(raw.data.subscriptions[0], {
       billingIntervalUnit: 'MONTH', billingIntervalCount: 1,
-      renewalIntervalUnit: 'MONTH', renewalIntervalCount: 1,
+      commitmentIntervalUnit: 'MONTH', commitmentIntervalCount: 1,
       nextChargeDate: '2026-08-15', nextRenewalDate: '2026-08-15',
     })
     raw.data.payments.push({
@@ -88,8 +88,7 @@ describe('validateSnapshot', () => {
     })
 
     const snapshot = validateSnapshot(raw)
-    expect(snapshot.data.subscriptions[0].renewalMode).toBe('ROLLING')
-    expect(snapshot.data.subscriptions[0].nextRenewalDate).toBeUndefined()
+    expect(snapshot.data.subscriptions[0].renewalMode).toBe('AUTOMATIC')
 
     const dbName = `snapshot-rolling-${crypto.randomUUID()}`
     createdDbNames.push(dbName)

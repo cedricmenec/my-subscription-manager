@@ -49,7 +49,7 @@ describe('IndexedDB integration', () => {
       {
         name: 'YouTube Premium Famille',
         status: 'PAUSED',
-        renewalMode: 'MANUAL',
+        renewalMode: 'ROLLING',
         pauseUntil: '2026-09-01',
       },
       db1,
@@ -149,7 +149,7 @@ describe('IndexedDB migration v7→v8', () => {
       name: 'Migration Test',
       status: 'ACTIVE',
       renewalMode: 'AUTOMATIC',
-      renewalStartDate: '2025-06-15',
+      renewalStartDate: undefined,
       nextRenewalDate: '2026-06-15',
       billingIntervalUnit: 'MONTH',
       billingIntervalCount: 1,
@@ -171,9 +171,9 @@ describe('IndexedDB migration v7→v8', () => {
 
     const sub = await newDb.subscriptions.get(id)
     expect(sub).toBeDefined()
-    expect(sub!.subscriptionDate).toBe('2025-06-15')
-    expect(sub!.renewalPeriodStartDate).toBe('2025-06-15')
-    expect(sub!.schemaVersion).toBe(9)
+    expect(sub!.subscriptionDate).toBeUndefined()
+    expect(sub!.renewalPeriodStartDate).toBeUndefined()
+    expect(sub!.schemaVersion).toBe(10)
     // Le champ legacy a été supprimé
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((sub as any).renewalStartDate).toBeUndefined()
@@ -197,7 +197,7 @@ describe('IndexedDB migration v7→v8', () => {
       id,
       name: 'No Date',
       status: 'ACTIVE',
-      renewalMode: 'MANUAL',
+      renewalMode: 'AUTOMATIC',
       createdAt: new Date(),
       updatedAt: new Date(),
       schemaVersion: 7,
@@ -215,7 +215,7 @@ describe('IndexedDB migration v7→v8', () => {
     expect(sub).toBeDefined()
     expect(sub!.subscriptionDate).toBeUndefined()
     expect(sub!.renewalPeriodStartDate).toBeUndefined()
-    expect(sub!.schemaVersion).toBe(9)
+    expect(sub!.schemaVersion).toBe(10)
 
     newDb.close()
   })

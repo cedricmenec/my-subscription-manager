@@ -17,12 +17,12 @@ const subscription: Subscription = {
   categoryId: 'ctg-streaming',
   status: 'ACTIVE',
   renewalMode: 'AUTOMATIC',
+  commitmentIntervalUnit: 'YEAR' as const,
+  commitmentIntervalCount: 1,
   currentPrice: 17.99,
   currency: 'EUR',
   billingIntervalCount: 1,
   billingIntervalUnit: 'MONTH',
-  renewalIntervalCount: 1,
-  renewalIntervalUnit: 'YEAR',
   nextChargeDate: '2026-08-15',
   nextRenewalDate: '2026-09-15',
   subscriptionDate: '2024-09-15',
@@ -31,7 +31,7 @@ const subscription: Subscription = {
   notes: 'Compte familial',
   createdAt: new Date('2024-01-01T10:00:00Z'),
   updatedAt: new Date('2026-07-29T10:00:00Z'),
-  schemaVersion: 8,
+  schemaVersion: 10,
 }
 
 function payment(
@@ -158,19 +158,19 @@ describe('SubscriptionDetailPage', () => {
 
   it('n’affiche pas de carte de renouvellement pour un mode manuel', () => {
     renderPage({
-      subscription: { ...subscription, renewalMode: 'MANUAL' },
+      subscription: { ...subscription, renewalMode: 'UNKNOWN', commitmentIntervalUnit: undefined, commitmentIntervalCount: undefined },
     })
 
     const highlights = screen.getByRole('region', {
       name: 'Prochaines échéances importantes',
     })
     expect(within(highlights).queryByText('Prochain renouvellement')).not.toBeInTheDocument()
-    expect(screen.getByText('Renouvellement manuel')).toBeInTheDocument()
+    expect(screen.getByText('À qualifier')).toBeInTheDocument()
   })
 
   it('affiche la reconduction continue sans carte de renouvellement', () => {
     renderPage({
-      subscription: { ...subscription, renewalMode: 'ROLLING', nextRenewalDate: undefined },
+      subscription: { ...subscription, renewalMode: 'ROLLING', nextRenewalDate: undefined, commitmentIntervalUnit: undefined, commitmentIntervalCount: undefined },
     })
     const highlights = screen.getByLabelText('Prochaines échéances importantes')
     expect(within(highlights).queryByText('Prochain renouvellement')).not.toBeInTheDocument()

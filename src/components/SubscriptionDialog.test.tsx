@@ -247,12 +247,11 @@ describe('SubscriptionDialog — hasUnsavedChanges', () => {
       expect(screen.getByLabelText(/^Nom\s*\*?$/i)).toHaveFocus()
     })
 
-    it('propose les quatre modes avec la nouvelle question', () => {
+    it('propose les trois modes avec la nouvelle question', () => {
       renderDialog()
       const select = screen.getByLabelText(/Comment l'abonnement se poursuit-il/i)
       expect(select).toHaveTextContent('Reconduction continue')
       expect(select).toHaveTextContent('Renouvellement automatique à date fixe')
-      expect(select).toHaveTextContent('Renouvellement manuel à date fixe')
       expect(select).toHaveTextContent('Inconnu')
     })
 
@@ -261,8 +260,10 @@ describe('SubscriptionDialog — hasUnsavedChanges', () => {
       fireEvent.change(screen.getByLabelText(/Comment l'abonnement se poursuit-il/i), {
         target: { value: 'AUTOMATIC' },
       })
-      expect(screen.getByLabelText(/Cycle de renouvellement: quantité/i)).toHaveValue(null)
-      expect(screen.getByLabelText(/^Unité$/i)).toHaveValue('')
+      expect(screen.getByText(/Durée d'engagement/i)).toBeInTheDocument()
+      // Le champ quantité d'engagement doit être vide
+      expect(screen.getByPlaceholderText(/Quantité/i)).toHaveValue(null)
+      expect(screen.getByDisplayValue(/Unité/i)).toBeInTheDocument()
     })
   })
 })

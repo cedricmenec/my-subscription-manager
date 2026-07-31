@@ -65,8 +65,6 @@ function formatRenewal(subscription: Subscription): string {
       return 'Reconduction continue'
     case 'AUTOMATIC':
       return subscription.nextRenewalDate ?? 'Calcul automatique'
-    case 'MANUAL':
-      return subscription.nextRenewalDate ?? 'Renouvellement manuel'
     case 'UNKNOWN':
       return 'Inconnu'
   }
