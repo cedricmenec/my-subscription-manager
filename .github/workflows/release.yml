@@ -3,13 +3,13 @@ name: Prepare and publish release
 on:
   push:
     branches:
-      - release
+      - main
   workflow_dispatch:
 
 permissions: {}
 
 concurrency:
-  group: release-please-release
+  group: release-please-main
   cancel-in-progress: false
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
         id: release
         uses: googleapis/release-please-action@v5
         with:
-          target-branch: release
+          target-branch: main
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 

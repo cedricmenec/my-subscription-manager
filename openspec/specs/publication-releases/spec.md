@@ -34,23 +34,24 @@ Le système de publication SHALL attribuer à chaque release une version `MAJOR.
 
 ### Requirement: Préparation contrôlée d'une release
 
-Le système SHALL analyser les Conventional Commits présents sur `release` et SHALL maintenir une PR de release contenant la prochaine version et le changelog. Un merge applicatif sur `release` MUST NOT déployer l'application avant la fusion explicite de cette PR.
+Le système SHALL analyser les Conventional Commits présents sur `main` et SHALL maintenir une unique PR de release contenant la prochaine version et le changelog, ciblant `main`. Un merge applicatif sur `main` MUST NOT déployer l'application avant la fusion explicite de cette PR.
 
-#### Scenario: Promotion de changements vers release
+#### Scenario: Changement publiable fusionné sur main
 
-- **WHEN** des changements sont fusionnés dans la branche `release`
-- **THEN** Release Please crée ou met à jour une PR de release
+- **WHEN** des changements contenant au moins un Conventional Commit publiable sont fusionnés dans `main`
+- **THEN** Release Please crée ou met à jour une unique PR de release ciblant `main`
 - **AND** aucun déploiement Pages n'est effectué tant qu'aucune GitHub Release n'est créée
 
 #### Scenario: Validation humaine de la publication
 
-- **WHEN** la PR de release est relue et fusionnée
+- **WHEN** la PR de release est relue et fusionnée dans `main`
 - **THEN** le système met à jour la version et `CHANGELOG.md`
 - **AND** il crée le tag et la GitHub Release correspondants
+- **AND** il déclenche le déploiement Pages pour ce tag
 
 #### Scenario: Commit sans impact de version
 
-- **WHEN** seuls des commits sans impact SemVer tels que `docs:` ou `chore:` ont été ajoutés
+- **WHEN** seuls des commits sans impact SemVer tels que `docs:` ou `chore:` ont été ajoutés à `main`
 - **THEN** le système ne publie pas automatiquement une nouvelle version
 
 ### Requirement: Déploiement traçable sur GitHub Pages
@@ -99,17 +100,17 @@ Le build de production SHALL utiliser une URL Dexie Cloud fournie par la variabl
 
 ### Requirement: Documentation du processus de release
 
-Le dépôt SHALL fournir un guide développeur décrivant la convention de commits, les incréments SemVer, le bootstrap initial, la configuration GitHub, la publication normale, la vérification et le rollback.
+Le dépôt SHALL fournir un guide développeur décrivant la convention de commits, les incréments SemVer, la configuration GitHub, la publication depuis `main`, la vérification, le rollback et la migration depuis une ancienne branche `release`.
 
-#### Scenario: Préparation d'une première publication
+#### Scenario: Configuration ou migration
 
-- **WHEN** un mainteneur configure les releases pour la première fois
-- **THEN** la documentation lui permet de créer la branche `release`, les paramètres GitHub et le tag initial `v0.1.0`
+- **WHEN** un mainteneur configure les releases ou migre depuis une branche `release`
+- **THEN** la documentation lui permet de protéger `main`, de conserver les tags existants et de supprimer `release` seulement après vérification du nouveau flux
 
 #### Scenario: Publication courante
 
 - **WHEN** un mainteneur veut publier une nouvelle version
-- **THEN** la documentation lui fournit une checklist allant de la promotion vers `release` à la vérification de la version déployée
+- **THEN** la documentation lui fournit une checklist allant de la fusion des changements dans `main` à la fusion de l'unique PR Release Please et à la vérification de la version déployée
 
 #### Scenario: Rollback
 

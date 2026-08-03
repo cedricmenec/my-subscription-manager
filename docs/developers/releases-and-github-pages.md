@@ -4,21 +4,21 @@ This guide explains how Abos versions, publishes, deploys, and restores releases
 
 ## Release model
 
-`release` is a promotion branch. A merge into `release` prepares a release, but it does not deploy the application.
+`main` is the production branch. A merge of application changes into `main` prepares a release, but it does not deploy the application.
 
 ```text
-feature branch -> main -> promotion PR -> release
-                                      |
-                                      v
-                              Release Please PR
-                                      |
-                              maintainer merges it
-                                      |
-                                      v
-                     Git tag + GitHub Release + Pages
+feature branch -> pull request -> main
+                                  |
+                                  v
+                         Release Please PR
+                                  |
+                         maintainer merges it
+                                  |
+                                  v
+                 Git tag + GitHub Release + Pages
 ```
 
-Release Please reads commits on `release`. It creates or updates a release PR. When a maintainer merges this release PR, Release Please creates an immutable Git tag and a GitHub Release. The same workflow then calls the Pages deployment workflow with that tag.
+Release Please reads commits on `main`. It creates or updates one release PR targeting `main`. When a maintainer merges this release PR, Release Please creates an immutable Git tag and a GitHub Release. The same workflow then calls the Pages deployment workflow with that tag.
 
 The deployment checks out the tag, not the current branch head. The deployed files can therefore be traced to one exact release.
 
@@ -76,7 +76,7 @@ When pull requests are squash-merged, the pull request title becomes the commit 
 
 - `release-please-config.json` defines the Node release strategy, `v` tags, and the pre-1.0 version policy.
 - `.release-please-manifest.json` records the current released version.
-- `.github/workflows/release.yml` prepares releases from the `release` branch and calls deployment only when a release was created.
+- `.github/workflows/release.yml` prepares releases from `main` and calls deployment only when a release was created.
 - `.github/workflows/deploy-pages.yml` validates, builds, and deploys an existing release tag. It also supports manual restoration.
 - `package.json` contains the application version updated by the release PR.
 - `CHANGELOG.md` is created and maintained by Release Please after automated release preparation starts.
@@ -115,20 +115,20 @@ In **Settings > Pages**:
 
 1. Set **Build and deployment > Source** to **GitHub Actions**.
 2. Keep the generated environment name `github-pages`.
-3. If deployment protection rules are used, allow deployments from `release`.
+3. If deployment protection rules are used, allow deployments from `main`.
 
 The application already uses relative Vite assets and hash navigation. A repository site such as `https://OWNER.github.io/REPOSITORY/` does not need a custom `404.html` fallback.
 
 ### Branch protection
 
-Create and protect the `release` branch:
+Protect the `main` branch:
 
 - require a pull request before merging;
 - block direct pushes and force pushes;
 - require the normal CI checks used by the project;
 - do not allow tag deletion or tag rewriting as part of the release procedure.
 
-The branch protection is the guarantee that every normal promotion and every release decision is reviewed.
+The branch protection is the guarantee that application changes and every release decision are reviewed.
 
 ## One-time bootstrap for v0.1.0
 
@@ -148,24 +148,23 @@ Do this only after the release workflows have been merged into `main` and all ch
    pnpm build
    ```
 
-3. Create `release` and the annotated tag on the same commit:
+3. Create the annotated tag on `main`:
 
    ```powershell
-   git switch -c release
    git tag -a v0.1.0 -m "Release v0.1.0"
-   git push -u origin release v0.1.0
+   git push origin main v0.1.0
    ```
 
-   Push the branch and tag together. This lets the first `release` workflow see the baseline tag and prevents the complete pre-release history from being proposed as a new version.
+   Push the branch and tag together. This lets the first `main` workflow see the baseline tag and prevents the complete pre-release history from being proposed as a new version.
 
 4. Create the initial GitHub Release:
 
    ```powershell
-   gh release create v0.1.0 --target release --title "v0.1.0" --generate-notes
+   gh release create v0.1.0 --target main --title "v0.1.0" --generate-notes
    ```
 
 5. Open **Actions > Deploy release to GitHub Pages > Run workflow**.
-6. Select the `release` branch and enter `v0.1.0` as `release_tag`.
+6. Select the `main` branch and enter `v0.1.0` as `release_tag`.
 7. Verify the deployed URL and the diagnostic dialog as described below.
 
 Do not change `.release-please-manifest.json` after this bootstrap. Release Please updates it in later release PRs.
@@ -174,18 +173,33 @@ Do not change `.release-please-manifest.json` after this bootstrap. Release Plea
 
 Use this checklist for every release after `v0.1.0`.
 
-1. Confirm all intended changes are merged into `main` with Conventional Commit subjects.
-2. Open a promotion PR from `main` to `release`.
-3. Review CI, migration notes, snapshot compatibility, and release risk.
-4. Merge the promotion PR.
-5. Wait for **Prepare and publish release** to create or update the Release Please PR against `release`.
-6. Review the proposed version and `CHANGELOG.md`.
-7. Merge the Release Please PR when the version is ready for production.
-8. Wait for the same workflow to create the tag and GitHub Release.
-9. The workflow calls **Deploy release to GitHub Pages** with the new tag.
-10. Verify the deployed application.
+1. Review CI, migration notes, snapshot compatibility, and release risk before merging the changes into `main`.
+2. Merge the application PR into `main` with Conventional Commit subjects.
+3. Wait for **Prepare and publish release** to create or update the unique Release Please PR against `main`.
+4. Review the proposed version and `CHANGELOG.md`.
+5. Merge the Release Please PR when the version is ready for production.
+6. Wait for the same workflow to create the tag and GitHub Release.
+7. The workflow calls **Deploy release to GitHub Pages** with the new tag.
+8. Verify the deployed application.
 
-A promotion merge alone must not start a Pages deployment. If it does, stop and correct the workflow before publishing another release.
+An application merge alone must not start a Pages deployment. If it does, stop and correct the workflow before publishing another release.
+
+## Migration from the former `release` branch
+
+This repository previously used a separate `release` branch. The generated `0.2.0` release state (manifest, application version, and changelog) is now integrated into `main` before the workflow is switched. Its historical tag `my-subscription-manager-v0.2.0` is intentionally left untouched; tags are immutable. New releases use the canonical `vMAJOR.MINOR.PATCH` format.
+
+After merging and pushing this migration:
+
+1. Confirm the **Prepare and publish release** workflow creates or updates a single Release Please PR targeting `main`.
+2. Confirm that the PR proposes the version after `0.2.0` when it contains a publishable Conventional Commit.
+3. In **Settings > Branches**, remove the protection rule for `release` if one exists.
+4. Delete the remote `release` branch only after those checks:
+
+   ```powershell
+   git push origin --delete release
+   ```
+
+Do not delete or rename an existing tag or GitHub Release as part of this migration.
 
 ## Verify a deployment
 
@@ -210,7 +224,7 @@ Restoration redeploys an existing immutable tag. It does not move the tag and do
 2. Check the Dexie migration notes between the current release and that tag.
 3. If the newer release performed a non-backward-compatible Dexie migration, do not assume that an older frontend can read the migrated database. Export or restore a compatible snapshot first when the relevant change documentation requires it.
 4. Open **Actions > Deploy release to GitHub Pages > Run workflow**.
-5. Select the `release` branch.
+5. Select the `main` branch.
 6. Enter the existing tag, for example `v0.4.1`.
 7. Wait for lint, tests, build, and deployment to complete.
 8. Verify that the diagnostic displays `0.4.1` and `production`.
@@ -223,7 +237,7 @@ After service is restored, fix the defect on `main` and publish a new version th
 
 ### No release PR appears
 
-- Check that the commit reached `release`.
+- Check that the commit reached `main`.
 - Check that at least one commit has a release-producing type such as `fix:` or `feat:`.
 - Check the Release Please job permissions and repository Actions settings.
 - Confirm that `v0.1.0` exists before expecting versions after the bootstrap.
