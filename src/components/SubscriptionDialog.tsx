@@ -12,7 +12,6 @@ import {
   type UpsertSubscriptionInput,
 } from '../services/subscriptions'
 import { computeEngagementExposure, describeInterval, parseOptionalNumber } from '../services/finance'
-import { addIntervalToCivilDate } from '../services/civilDate'
 
 export interface SubscriptionFormState {
   name: string
@@ -158,13 +157,6 @@ const PRESET_OPTIONS: Array<{ value: BillingCyclePreset; label: string }> = [
   { value: 'YEAR', label: 'Annuel' },
   { value: 'CUSTOM', label: 'Personnalisé' },
 ]
-
-function computeCommitmentEndDate(startDate: string, unit: IntervalUnit | '', count: string): string | undefined {
-  if (!startDate || !unit || !count) return undefined
-  const c = parseInt(count, 10)
-  if (!c || c < 1) return undefined
-  return addIntervalToCivilDate(startDate, unit as IntervalUnit, c)
-}
 
 const INTERVAL_LABELS: Record<IntervalUnit, string> = {
   DAY: 'Jour',

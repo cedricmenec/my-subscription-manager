@@ -42,7 +42,6 @@ const STATUS_LABELS: Record<SubscriptionStatus, string> = {
 const RENEWAL_LABELS: Record<RenewalMode, string> = {
   ROLLING: 'Reconduction continue',
   AUTOMATIC: 'Renouvellement automatique',
-  MANUAL: 'Renouvellement manuel',
   UNKNOWN: 'Inconnu',
 }
 

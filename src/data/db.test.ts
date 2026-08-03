@@ -282,7 +282,7 @@ describe('SubscriptionDatabase', () => {
       billingIntervalCount: 1,
       schemaVersion: 10,
     })
-    expect(deterministic?.renewalIntervalUnit).toBeUndefined()
+    expect(deterministic).not.toHaveProperty('renewalIntervalUnit')
     expect(deterministic?.nextRenewalDate).toBeUndefined()
     expect((await upgradedDb.subscriptions.get('sbs-annual'))?.renewalMode).toBe('AUTOMATIC')
     expect((await upgradedDb.subscriptions.get('sbs-annual'))?.commitmentIntervalUnit).toBe('YEAR')

@@ -1,0 +1,110 @@
+name: Deploy release to GitHub Pages
+
+on:
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Existing immutable release tag (vMAJOR.MINOR.PATCH)
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing immutable release tag to deploy or restore
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: github-pages-production
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Validate and build release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      VITE_DEXIE_CLOUD_URL: ${{ vars.VITE_DEXIE_CLOUD_URL }}
+      VITE_APP_ENVIRONMENT: production
+    steps:
+      - name: Validate release tag and public configuration
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "release_tag must match vMAJOR.MINOR.PATCH." >&2
+            exit 1
+          fi
+
+          if [[ -z "${VITE_DEXIE_CLOUD_URL//[[:space:]]/}" ]]; then
+            echo "Repository variable VITE_DEXIE_CLOUD_URL is required." >&2
+            exit 1
+          fi
+
+          echo "VITE_APP_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+
+      - name: Check out the immutable release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - name: Verify checked-out tag
+        shell: bash
+        run: |
+          TAG_COMMIT="$(git rev-list -n 1 "$RELEASE_TAG")"
+          HEAD_COMMIT="$(git rev-parse HEAD)"
+          if [[ "$TAG_COMMIT" != "$HEAD_COMMIT" ]]; then
+            echo "Checked-out commit does not match $RELEASE_TAG." >&2
+            exit 1
+          fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build production assets
+        run: pnpm build
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload static Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -172,7 +172,7 @@ describe('IndexedDB migration v7→v8', () => {
     const sub = await newDb.subscriptions.get(id)
     expect(sub).toBeDefined()
     expect(sub!.subscriptionDate).toBeUndefined()
-    expect(sub!.renewalPeriodStartDate).toBeUndefined()
+    expect(sub).not.toHaveProperty('renewalPeriodStartDate')
     expect(sub!.schemaVersion).toBe(10)
     // Le champ legacy a été supprimé
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -214,7 +214,7 @@ describe('IndexedDB migration v7→v8', () => {
     const sub = await newDb.subscriptions.get(id)
     expect(sub).toBeDefined()
     expect(sub!.subscriptionDate).toBeUndefined()
-    expect(sub!.renewalPeriodStartDate).toBeUndefined()
+    expect(sub).not.toHaveProperty('renewalPeriodStartDate')
     expect(sub!.schemaVersion).toBe(10)
 
     newDb.close()

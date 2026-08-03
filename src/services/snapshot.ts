@@ -202,7 +202,7 @@ export async function restoreSnapshot(
         await database.subscriptions.put(normalizeSubscriptionContinuation({
           ...sub,
           deletedAt: undefined,
-        }, { normalizeLegacy: true }))
+        }))
       }
       for (const cat of snapshot.data.categories) {
         await database.categories.put({ ...cat, deletedAt: undefined })

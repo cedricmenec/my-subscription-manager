@@ -1,0 +1,45 @@
+name: Prepare and publish release
+
+on:
+  push:
+    branches:
+      - release
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-please-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Prepare semantic release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: Run Release Please
+        id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          target-branch: release
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  deploy:
+    name: Deploy published release
+    needs: release
+    if: ${{ needs.release.outputs.release_created == 'true' }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-pages.yml
+    with:
+      release_tag: ${{ needs.release.outputs.tag_name }}

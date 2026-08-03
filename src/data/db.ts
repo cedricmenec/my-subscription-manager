@@ -156,6 +156,13 @@ export interface SubscriptionDatabaseOptions {
   skipCloud?: boolean
 }
 
+type LegacySubscription = Partial<Subscription> & {
+  billingInterval?: LegacyBillingInterval
+  renewalIntervalUnit?: IntervalUnit
+  renewalIntervalCount?: number
+  renewalPeriodStartDate?: string
+}
+
 function resolveCloudUrl(value?: string): string {
   const fromEnv = value ?? import.meta.env.VITE_DEXIE_CLOUD_URL
   return fromEnv && fromEnv.trim().length > 0
@@ -237,7 +244,7 @@ export class SubscriptionDatabase extends Dexie {
         await tx
           .table('subscriptions')
           .toCollection()
-          .modify((subscription: Partial<Subscription> & { billingInterval?: LegacyBillingInterval }) => {
+          .modify((subscription: LegacySubscription) => {
             const legacyInterval = subscription.billingInterval
             const mappedInterval = mapLegacyBillingInterval(legacyInterval)
 
@@ -530,7 +537,7 @@ export class SubscriptionDatabase extends Dexie {
         await tx
           .table('subscriptions')
           .toCollection()
-          .modify((subscription: Partial<Subscription>) => {
+          .modify((subscription: LegacySubscription) => {
             const hasSameNonAnnualCycle = Boolean(
               subscription.renewalMode === 'AUTOMATIC' &&
                 subscription.billingIntervalUnit &&

@@ -33,7 +33,7 @@ Le système SHALL afficher les informations de diagnostic dans un dialogue modal
 
 ### Requirement: Contenu du dialogue de diagnostic
 
-Le dialogue de diagnostic SHALL afficher les mêmes informations que la section actuelle : version applicative, base locale, identité connectée, statut réseau, statut Dexie Cloud, dernière synchronisation, environnement.
+Le dialogue de diagnostic SHALL afficher les mêmes informations que la section actuelle : version applicative, base locale, identité connectée, statut réseau, statut Dexie Cloud, dernière synchronisation, environnement. Dans un build GitHub Pages publié, la version applicative SHALL correspondre exactement à la version SemVer du tag déployé, conformément à AC-022.
 
 #### Scenario: Affichage des informations de diagnostic
 
@@ -46,6 +46,12 @@ Le dialogue de diagnostic SHALL afficher les mêmes informations que la section 
   - Statut Dexie Cloud : label de synchronisation
   - Dernière synchronisation : timestamp ISO
   - Environnement : `VITE_APP_ENVIRONMENT` ou "development"
+
+#### Scenario: Version d'une release publiée
+
+- **WHEN** l'application est construite et déployée depuis le tag `vMAJOR.MINOR.PATCH`
+- **THEN** le diagnostic affiche `MAJOR.MINOR.PATCH` comme version applicative
+- **AND** il affiche `production` comme environnement
 
 ### Requirement: Accessibilité du dialogue
 
