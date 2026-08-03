@@ -105,6 +105,35 @@ The URL is stored in `localStorage` under the application origin. It is public c
 
 The workflow verifies that neither `dexie-cloud.key`, `dexie-cloud.json`, nor the removed build-time variable name is present in `dist/`.
 
+### Allow application origins in Dexie Cloud
+
+Dexie Cloud only accepts authentication and synchronization requests from allowed browser origins. From the repository root, list the origins currently registered for the connected database:
+
+```powershell
+npx dexie-cloud whitelist
+```
+
+Allow the production GitHub Pages origin:
+
+```powershell
+npx dexie-cloud whitelist https://{github-account}.github.io
+```
+
+Replace `{github-account}` with the GitHub account that owns the Pages site. Use the exact value returned by `window.location.origin` in the deployed application. For a project site, the repository path is not part of the origin: allow `https://{github-account}.github.io`, not `https://{github-account}.github.io/my-subscription-manager/`. The scheme, host, and development port must match exactly. For example, allow the default local Vite origin separately when needed:
+
+```powershell
+npx dexie-cloud whitelist http://localhost:5173
+```
+
+The CLI reads the ignored local files `dexie-cloud.json` and `dexie-cloud.key`. If they are missing, reconnect the CLI to the intended database before updating its whitelist:
+
+```powershell
+npx dexie-cloud connect https://YOUR-DATABASE.dexie.cloud
+npx dexie-cloud whitelist https://{github-account}.github.io
+```
+
+The connection command authenticates the database owner or manager and recreates the local CLI configuration. Never commit `dexie-cloud.key` or copy its contents into GitHub variables, the Pages artifact, or browser storage. After changing the whitelist, reload the deployed application and retry authentication.
+
 ### GitHub Pages
 
 In **Settings > Pages**:
