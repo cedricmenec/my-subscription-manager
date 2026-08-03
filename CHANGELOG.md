@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/cedricmenec/my-subscription-manager/compare/v0.3.0...v0.4.0) (2026-08-03)
+
+
+### Features
+
+* **config:** configurer Dexie Cloud par navigateur ([5da86ba](https://github.com/cedricmenec/my-subscription-manager/commit/5da86ba66b11d234f8149638a3266d5cecc1605a))
+
 ## [0.3.0](https://github.com/cedricmenec/my-subscription-manager/compare/v0.2.0...v0.3.0) (2026-08-03)
 
 
