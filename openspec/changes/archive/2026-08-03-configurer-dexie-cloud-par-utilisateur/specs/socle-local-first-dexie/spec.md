@@ -1,8 +1,4 @@
-## Purpose
-
-Définir les garanties du socle local-first Dexie pour Abos : persistance IndexedDB via Dexie.js, authentification et synchronisation via Dexie Cloud, statut de synchro explicite, purge locale distincte et diagnostic minimal, sans backend applicatif personnalisé.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Base locale Dexie versionnée
 
@@ -37,49 +33,6 @@ L'application SHALL configurer `dexie-cloud-addon` avec l'URL choisie localement
 - **THEN** l'application signale une erreur de connexion ou de synchronisation
 - **AND** aucune base locale historique n'est supprimée
 
-### Requirement: Écritures locales non bloquantes
-
-L'application SHALL considérer une écriture comme réussie dès validation de la transaction locale, sans attendre un accusé réseau, conformément à FUN-CRUD-001, FUN-CRUD-002 et TECH-LF-003.
-
-#### Scenario: Création hors connexion
-
-- **WHEN** l'appareil est hors connexion et l'utilisateur enregistre une modification
-- **THEN** la transaction locale Dexie est validée immédiatement
-- **AND** l'interface confirme l'enregistrement sur cet appareil
-- **AND** la synchronisation reste en attente jusqu’au retour du réseau
-
-### Requirement: Indicateur global de synchronisation explicite
-
-L'application SHALL afficher un état global de synchronisation dérivé de l’état réel Dexie Cloud et SHALL distinguer local enregistré, en attente, synchronisation en cours, hors connexion et erreur de synchronisation, conformément à TECH-LF-007, FUN-CRUD-003 et AC-009.
-
-#### Scenario: Synchronisation en erreur sans perte locale
-
-- **WHEN** une synchronisation échoue après une écriture locale réussie
-- **THEN** l'interface affiche un état d’erreur de synchronisation
-- **AND** l'interface n’indique pas une perte de donnée locale
-- **AND** l’utilisateur peut relancer la synchronisation
-
-### Requirement: Déconnexion distincte de la purge locale
-
-L'application SHALL fournir des actions distinctes de déconnexion et de purge locale, et la purge locale MUST NOT supprimer la copie distante, conformément à FUN-AUTH-003, FUN-AUTH-004 et AC-007.
-
-#### Scenario: Purge locale contrôlée
-
-- **WHEN** l'utilisateur déclenche la purge locale
-- **THEN** les données locales de l’appareil sont supprimées
-- **AND** les données synchronisées distantes restent intactes
-- **AND** une reconnexion permet de récupérer les données distantes
-
-### Requirement: Diagnostic technique minimal
-
-L'application SHALL exposer une vue de diagnostic incluant au minimum la version applicative, le nom de la base locale, l’identité connectée, l’état réseau et l’état de synchronisation, conformément à la section FUN-10 et AC-022.
-
-#### Scenario: Consultation du diagnostic
-
-- **WHEN** l'utilisateur ouvre la vue diagnostic
-- **THEN** les informations techniques minimales sont visibles
-- **AND** aucune donnée métier détaillée ni secret n’est affiché
-
 ### Requirement: Frontière de sécurité frontend
 
 Le frontend MUST NOT embarquer de secret Dexie Cloud machine, de token administratif, de fichier `dexie-cloud.key`, de fichier `dexie-cloud.json` ni d'URL de base imposée au build, conformément à SEC-002, SEC-003 et AC-019. L'URL choisie SHALL rester une configuration locale non synchronisée du navigateur.
@@ -96,6 +49,8 @@ Le frontend MUST NOT embarquer de secret Dexie Cloud machine, de token administr
 - **WHEN** l'utilisateur valide son URL Dexie Cloud
 - **THEN** l'URL est stockée dans le stockage local de l'origine du navigateur
 - **AND** elle n'est écrite dans aucune table synchronisée
+
+## ADDED Requirements
 
 ### Requirement: Sélection non destructive de la base Dexie Cloud
 

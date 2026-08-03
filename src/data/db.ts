@@ -1,8 +1,11 @@
 import Dexie, { type Table } from 'dexie'
 import dexieCloud, { type DexieCloudTable, type SyncState } from 'dexie-cloud-addon'
+import {
+  getConfiguredDexieCloudUrl,
+  normalizeDexieCloudUrl,
+} from '../config/dexieCloudConfiguration'
 
 export const DEFAULT_DB_NAME = 'subscription-manager-db'
-const FALLBACK_DEXIE_CLOUD_URL = 'https://invalid.dexie.cloud'
 
 export interface SyncedEntity {
   id: string
@@ -164,10 +167,11 @@ type LegacySubscription = Partial<Subscription> & {
 }
 
 function resolveCloudUrl(value?: string): string {
-  const fromEnv = value ?? import.meta.env.VITE_DEXIE_CLOUD_URL
-  return fromEnv && fromEnv.trim().length > 0
-    ? fromEnv.trim()
-    : FALLBACK_DEXIE_CLOUD_URL
+  const configuredUrl = value ?? getConfiguredDexieCloudUrl()
+  if (!configuredUrl) {
+    throw new Error('Configurez une URL Dexie Cloud avant d’initialiser la base.')
+  }
+  return normalizeDexieCloudUrl(configuredUrl)
 }
 
 export class SubscriptionDatabase extends Dexie {

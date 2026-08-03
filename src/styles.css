@@ -26,6 +26,66 @@ a {
   min-height: 100vh;
 }
 
+.setup-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 32px 20px;
+}
+
+.setup-card {
+  width: min(100%, 620px);
+  border: 1px solid #d9dfdd;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 16px 48px rgb(23 63 58 / 10%);
+  padding: 32px;
+}
+
+.setup-card h1 {
+  margin-bottom: 16px;
+}
+
+.setup-card > p {
+  color: #52605d;
+  line-height: 1.6;
+}
+
+.setup-warning {
+  margin: 20px 0;
+  border-left: 4px solid #d49a35;
+  border-radius: 4px;
+  background: #fff8e8;
+  padding: 14px 16px;
+  line-height: 1.5;
+}
+
+.dexie-cloud-config-form label {
+  display: block;
+  margin-bottom: 6px;
+  color: #2a3936;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.dexie-cloud-config-form input {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #bbc8c4;
+  border-radius: 6px;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.dexie-cloud-config-form input[aria-invalid="true"] {
+  border-color: #a44335;
+}
+
+.setup-security-note {
+  margin-top: 20px !important;
+  font-size: 0.85rem;
+}
+
 .topbar {
   display: flex;
   min-height: 64px;
@@ -1739,6 +1799,21 @@ textarea:focus-visible {
   font-size: 0.8rem;
 }
 
+.cloud-url-value {
+  overflow-wrap: anywhere;
+}
+
+.cloud-url-change {
+  margin-top: 20px;
+  border-top: 1px solid #d9dfdd;
+  padding-top: 20px;
+}
+
+.cloud-url-change h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
 @media (max-width: 640px) {
   .diagnostic-dialog-grid {
     grid-template-columns: 1fr;
@@ -1747,6 +1822,10 @@ textarea:focus-visible {
   .settings-list-item {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .setup-card {
+    padding: 24px 18px;
   }
 }
 

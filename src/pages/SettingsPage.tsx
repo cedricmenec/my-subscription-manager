@@ -3,6 +3,11 @@ import type { SyncState } from 'dexie-cloud-addon'
 import { getSyncStatusLabel, mapSyncStateToAppStatus } from '../services/syncState'
 import { validateExchangeRate } from '../services/finance'
 import ConfirmDialog from '../components/ConfirmDialog'
+import DexieCloudConfigurationForm from '../components/DexieCloudConfigurationForm'
+import {
+  getConfiguredDexieCloudUrl,
+  saveDexieCloudUrl,
+} from '../config/dexieCloudConfiguration'
 
 interface SettingsPageProps {
   categories: Array<{ id: string; name: string }>
@@ -46,6 +51,9 @@ export default function SettingsPage({
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({})
   const [pendingDeleteCategoryId, setPendingDeleteCategoryId] = useState<string | null>(null)
   const [pendingRemoveCurrency, setPendingRemoveCurrency] = useState<string | null>(null)
+  const [pendingCloudUrl, setPendingCloudUrl] = useState<string | null>(null)
+  const [cloudUrlFeedback, setCloudUrlFeedback] = useState<string | null>(null)
+  const activeCloudUrl = getConfiguredDexieCloudUrl() ?? ''
   const appSyncStatus = mapSyncStateToAppStatus(syncState)
 
   function handleAddRate() {
@@ -80,6 +88,21 @@ export default function SettingsPage({
     const currency = pendingRemoveCurrency
     setPendingRemoveCurrency(null)
     onRemoveExchangeRate(currency)
+  }
+
+  function handleCloudUrlChange(normalizedUrl: string) {
+    setCloudUrlFeedback(null)
+    if (normalizedUrl === activeCloudUrl) {
+      setCloudUrlFeedback('Cette URL est déjà utilisée par l’application.')
+      return
+    }
+    setPendingCloudUrl(normalizedUrl)
+  }
+
+  function handleConfirmCloudUrlChange() {
+    if (!pendingCloudUrl) return
+    saveDexieCloudUrl(pendingCloudUrl)
+    window.location.reload()
   }
 
   return (
@@ -177,6 +200,9 @@ export default function SettingsPage({
       {/* Connexion Dexie Cloud */}
       <section className="control-card" aria-labelledby="connection-title">
         <h2 id="connection-title">Connexion Dexie Cloud</h2>
+        <p>
+          Base active : <code className="cloud-url-value">{activeCloudUrl}</code>
+        </p>
         <label htmlFor="settings-email-input">Adresse e-mail</label>
         <input
           id="settings-email-input"
@@ -199,6 +225,21 @@ export default function SettingsPage({
             ? 'Non connecté. Les données restent locales.'
             : `Connecté en tant que ${identityLabel}. Synchronisation : ${getSyncStatusLabel(appSyncStatus)}`}
         </p>
+        <div className="cloud-url-change">
+          <h3>Changer de base Dexie Cloud</h3>
+          <p>
+            Une autre URL sélectionnera une base locale distincte. La base actuelle ne sera ni
+            supprimée ni modifiée.
+          </p>
+          <DexieCloudConfigurationForm
+            initialUrl={activeCloudUrl}
+            submitLabel="Changer de base"
+            onSubmit={handleCloudUrlChange}
+          />
+          {cloudUrlFeedback ? (
+            <p className="settings-hint" role="status">{cloudUrlFeedback}</p>
+          ) : null}
+        </div>
       </section>
 
       {/* Local-first */}
@@ -247,6 +288,21 @@ export default function SettingsPage({
         confirmLabel="Supprimer"
         cancelLabel="Annuler"
         variant="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={pendingCloudUrl !== null}
+        onClose={() => setPendingCloudUrl(null)}
+        onConfirm={handleConfirmCloudUrlChange}
+        title="Changer de base Dexie Cloud"
+        message={
+          pendingCloudUrl
+            ? `Abos va utiliser ${pendingCloudUrl} après rechargement. La base locale associée à ${activeCloudUrl} restera intacte et pourra être retrouvée en reconfigurant cette URL.`
+            : ''
+        }
+        confirmLabel="Changer et recharger"
+        cancelLabel="Conserver la base actuelle"
+        variant="warning"
       />
     </div>
   )

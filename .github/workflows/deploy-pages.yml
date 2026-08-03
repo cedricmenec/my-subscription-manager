@@ -29,19 +29,13 @@ jobs:
       pages: write
     env:
       RELEASE_TAG: ${{ inputs.release_tag }}
-      VITE_DEXIE_CLOUD_URL: ${{ vars.VITE_DEXIE_CLOUD_URL }}
       VITE_APP_ENVIRONMENT: production
     steps:
-      - name: Validate release tag and public configuration
+      - name: Validate release tag
         shell: bash
         run: |
           if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo "release_tag must match vMAJOR.MINOR.PATCH." >&2
-            exit 1
-          fi
-
-          if [[ -z "${VITE_DEXIE_CLOUD_URL//[[:space:]]/}" ]]; then
-            echo "Repository variable VITE_DEXIE_CLOUD_URL is required." >&2
             exit 1
           fi
 
@@ -85,6 +79,19 @@ jobs:
 
       - name: Build production assets
         run: pnpm build
+
+      - name: Verify deployment contains no local Dexie Cloud configuration
+        shell: bash
+        run: |
+          if find dist -type f \( -name 'dexie-cloud.key' -o -name 'dexie-cloud.json' \) | grep -q .; then
+            echo "The Pages artifact contains a forbidden Dexie Cloud configuration file." >&2
+            exit 1
+          fi
+
+          if grep -R -F 'VITE_DEXIE_CLOUD_URL' dist; then
+            echo "The Pages artifact still references the removed build-time Dexie Cloud variable." >&2
+            exit 1
+          fi
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

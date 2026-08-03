@@ -79,24 +79,26 @@ Le système SHALL déployer sur GitHub Pages uniquement un tag SemVer existant, 
 
 ### Requirement: Configuration et permissions de production sûres
 
-Le build de production SHALL utiliser une URL Dexie Cloud fournie par la variable publique GitHub `VITE_DEXIE_CLOUD_URL`, SHALL refuser une valeur absente et MUST NOT intégrer de credential confidentiel, conformément à AC-019.
+Le build de production SHALL être indépendant de toute URL Dexie Cloud utilisateur, SHALL fixer uniquement la version et l'environnement applicatifs nécessaires au diagnostic et MUST NOT intégrer de credential confidentiel, conformément à AC-019.
 
-#### Scenario: Configuration publique présente
+#### Scenario: Build agnostique réussi
 
-- **WHEN** `VITE_DEXIE_CLOUD_URL` est configurée et qu'une release est construite
-- **THEN** Vite intègre cette URL publique au bundle
-- **AND** l'environnement applicatif vaut `production`
-
-#### Scenario: Configuration publique absente
-
-- **WHEN** `VITE_DEXIE_CLOUD_URL` est vide ou absente
-- **THEN** le pipeline échoue avant le build
-- **AND** aucun déploiement n'est effectué
+- **WHEN** une release est construite sans variable GitHub `VITE_DEXIE_CLOUD_URL`
+- **THEN** le build réussit avec l'environnement applicatif `production`
+- **AND** la version applicative provient du tag de release
+- **AND** aucune URL Dexie Cloud utilisateur n'est intégrée au bundle
 
 #### Scenario: Secrets exclus du frontend
 
 - **WHEN** le pipeline construit une release
 - **THEN** aucun secret Dexie Cloud machine, credential n8n ou fichier `dexie-cloud.key` n'est copié dans `dist/`
+- **AND** `dexie-cloud.json` n'est pas copié dans `dist/`
+
+#### Scenario: Configuration différée au navigateur
+
+- **WHEN** un utilisateur ouvre le build Pages pour la première fois
+- **THEN** la release ne présélectionne aucune base distante
+- **AND** l'utilisateur doit configurer son URL localement avant l'initialisation de l'application
 
 ### Requirement: Documentation du processus de release
 

@@ -97,17 +97,13 @@ In **Settings > Actions > General**:
 
 The workflows still declare permissions per job. Release Please receives `contents: write`, `issues: write`, and `pull-requests: write`. The deployment receives `pages: write` and `id-token: write`.
 
-### Public Dexie Cloud configuration
+### Per-browser Dexie Cloud configuration
 
-In **Settings > Secrets and variables > Actions > Variables**, create this repository variable:
+Do not create a repository variable named `VITE_DEXIE_CLOUD_URL`. The Pages artifact is database-agnostic: each browser configures its own Dexie Cloud URL before the application loads.
 
-```text
-VITE_DEXIE_CLOUD_URL=https://YOUR_DATABASE.dexie.cloud
-```
+The URL is stored in `localStorage` under the application origin. It is public configuration, not a credential. Never put a Dexie Cloud machine secret, an n8n credential, `dexie-cloud.key`, or any other secret in a `VITE_*` variable or in the browser configuration.
 
-This URL is public. Vite includes it in browser JavaScript. Never put a Dexie Cloud machine secret, an n8n credential, `dexie-cloud.key`, or any other secret in a `VITE_*` variable.
-
-The workflow stops before the build when this variable is empty.
+The workflow verifies that neither `dexie-cloud.key`, `dexie-cloud.json`, nor the removed build-time variable name is present in `dist/`.
 
 ### GitHub Pages
 
@@ -140,7 +136,6 @@ Do this only after the release workflows have been merged into `main` and all ch
 2. Run the local validation:
 
    ```powershell
-   $env:VITE_DEXIE_CLOUD_URL='https://YOUR_DATABASE.dexie.cloud'
    $env:VITE_APP_VERSION='0.1.0'
    $env:VITE_APP_ENVIRONMENT='production'
    pnpm lint
@@ -212,9 +207,23 @@ Check all of the following:
 5. Open the information icon in the top bar.
 6. Confirm **Version applicative** equals the tag without `v`.
 7. Confirm **Environnement** equals `production`.
-8. Confirm Dexie Cloud login and synchronization use the intended production database.
+8. Confirm the locally configured Dexie Cloud URL, login, and synchronization use the intended production database.
 
 For example, deployment of `v0.4.2` must display version `0.4.2` and environment `production`.
+
+### Preserve an existing Dexie Cloud installation
+
+Before deploying the first database-agnostic release:
+
+1. Export an application snapshot from **Données**.
+2. Record the exact Dexie Cloud URL used by the current `.env` without committing it.
+3. Deploy the new release.
+4. On the mandatory setup screen, enter that exact URL.
+5. Authenticate by OTP if requested, then verify the identity, local database name, record counts, and sync state.
+
+The schema and logical database name are unchanged. Dexie Cloud derives the IndexedDB suffix from the remote database identifier, so the same URL selects the existing local database. A different URL selects another IndexedDB and does not delete the previous one. Restore the previous URL to select the previous local database again.
+
+Changing the URL is a selection operation, not a data migration. Never purge local data as part of this procedure.
 
 ## Restore an older release
 
@@ -247,7 +256,7 @@ After service is restored, fix the defect on `main` and publish a new version th
 - Open the release workflow run and confirm `release_created` was true.
 - Check that the called workflow received the generated `tag_name`.
 - Check Pages and `github-pages` environment permissions.
-- Check that `VITE_DEXIE_CLOUD_URL` is present as a repository variable.
+- Check that the browser has a valid Dexie Cloud URL configured and that the application origin is allowed by that database.
 
 ### Build reports an outdated pnpm lockfile
 

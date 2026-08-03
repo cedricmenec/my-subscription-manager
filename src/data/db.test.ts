@@ -14,6 +14,29 @@ afterEach(async () => {
 })
 
 describe('SubscriptionDatabase', () => {
+  it('conserve une identité locale stable par URL distante sans confondre deux bases', () => {
+    const logicalName = `identity-db-${crypto.randomUUID()}`
+    const first = new SubscriptionDatabase({
+      name: logicalName,
+      cloudUrl: 'https://stable.dexie.cloud',
+    })
+    const same = new SubscriptionDatabase({
+      name: logicalName,
+      cloudUrl: 'https://stable.dexie.cloud/',
+    })
+    const other = new SubscriptionDatabase({
+      name: logicalName,
+      cloudUrl: 'https://other.dexie.cloud',
+    })
+
+    expect(first.name).toBe(same.name)
+    expect(other.name).not.toBe(first.name)
+
+    first.close()
+    same.close()
+    other.close()
+  })
+
   it('configure le schéma v3 avec payments et requireAuth', () => {
     const dbName = `test-db-${crypto.randomUUID()}`
     createdDbNames.push(dbName)
