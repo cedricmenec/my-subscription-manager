@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/cedricmenec/my-subscription-manager/compare/v0.4.0...v0.5.0) (2026-08-06)
+
+
+### Features
+
+* **docs:** add instructions for allowing application origins in Dexie Cloud ([a4e11ba](https://github.com/cedricmenec/my-subscription-manager/commit/a4e11ba0f8d2cc6d7a2ad12ad6baa86cc5fd2743))
+
 ## [0.4.0](https://github.com/cedricmenec/my-subscription-manager/compare/v0.3.0...v0.4.0) (2026-08-03)
 
 
